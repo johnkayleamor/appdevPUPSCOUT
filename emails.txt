@@ -1,0 +1,24 @@
+To: testuser@pup.edu.ph
+Subject: Confirm your email
+Please confirm your account by <a href='http://localhost:5236/Identity/Account/ConfirmEmail?userId=64f9626b-d347-45bb-b2d5-578090fa87b5&amp;code=Q2ZESjhEZkJGSm9OZWxaSnB5UUtCNE9KMTJnYjJTL0loRzdxOTNzdXdLdkhFNlNQMmNrbEs1eWQ3azN5b3QwU3JucGlVMTZ0T2NndU5LdzNiK2dVeWZ0ZktJQnpNVFJ3dHZJa09VMGM0dFNET1BhSXdmdzBqTGhMdWJQNUQ4ckVEMXkvZGhaNGR1dThRbFlzRy9vZnJLcGhVNktjMm45SURyaVZQbVJqK0VseFlpNWVsTDY1cGdLcHFxVWZOci93QUsrdmErUDdiMm95Z3FJZmhrRW5UL0ZNa2h1ODR0ZUpyRWFMc1BXUzduWkc4MVQvVmZjWEFBRmlLc0ZSWUwwZkhlRGRCdz09'>clicking here</a>.
+---
+To: student@pup.edu.ph
+Subject: Account suspended
+Your account has been suspended until 2026-11-17 15:25:38Z. Reason: test suspend. To appeal, contact admin@pup.edu.ph.
+---
+To: teacher@pup.edu.ph
+Subject: Account deactivated
+Your account has been deactivated. Reason: test deactivate. To appeal, contact admin@pup.edu.ph.
+---
+To: teacher@pup.edu.ph
+Subject: Account reactivated
+Your account has been reactivated. Reason: test reactivate.
+---
+To: newuser@pup.edu.ph
+Subject: Confirm your email
+Please confirm your account by <a href='http://localhost:5236/Identity/Account/ConfirmEmail?userId=33f22138-b6bd-4daa-a7cd-2e4b2b5307b1&amp;code=Q2ZESjhEZkJGSm9OZWxaSnB5UUtCNE9KMTJnZHJoL3RiWkRpOFNJZWMrS1VnWWVlOXZMTWVJZDNkWkMvNWplc0pUc1RzSFFSZ25tZmhYUkl3V0VwVGFUNTQ3ZnZjS2JqdFNGbTJuQnRLTnErZjVZQTc0QlRSUFpmSWJ2dWJIQnRGZlc1S3JUUWkxS3VFZVVkSGwrdVg4VFYwOEplNXh4N0lNTTlEWHAvWi8xeXJQSmszNXFHdHN3UGhmVFhoR0UxWTFQZXNCQmpEUlNjMnBoN1RxdXlwb2N3TC92RzI5ZEFFczdsRXp5T2VxN3cxN3MrTG1COGlWamxseStBdWZYMGRMaXNTdz09'>clicking here</a>.
+---
+To: student@pup.edu.ph
+Subject: Account reactivated
+Your account has been reactivated. Reason: clear test suspension.
+---

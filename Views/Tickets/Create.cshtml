@@ -1,0 +1,59 @@
+@model appdevPUPSCOUT.Models.TicketCreateViewModel
+
+@{
+    ViewData["Title"] = "Submit Report";
+}
+
+<h1>Submit Report</h1>
+
+<form asp-action="Create" method="post" enctype="multipart/form-data">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+    <div class="mb-3">
+        <label asp-for="Category" class="form-label"></label>
+        <select asp-for="Category" class="form-select" asp-items="Html.GetEnumSelectList<appdevPUPSCOUT.Models.TicketCategory>()"></select>
+        <span asp-validation-for="Category" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="RoomId" class="form-label">Room</label>
+        <select asp-for="RoomId" class="form-select">
+            <option value="">Select room</option>
+            @foreach (var room in (List<appdevPUPSCOUT.Models.Room>)ViewBag.Rooms)
+            {
+                <option value="@room.Id">@room.Name</option>
+            }
+        </select>
+        <span asp-validation-for="RoomId" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="EquipmentId" class="form-label">Equipment</label>
+        <select asp-for="EquipmentId" class="form-select">
+            <option value="">Select equipment</option>
+            @foreach (var eq in (List<appdevPUPSCOUT.Models.Equipment>)ViewBag.Equipment)
+            {
+                <option value="@eq.Id">@eq.Name</option>
+            }
+        </select>
+        <span asp-validation-for="EquipmentId" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Description" class="form-label"></label>
+        <textarea asp-for="Description" class="form-control" rows="4"></textarea>
+        <span asp-validation-for="Description" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Image" class="form-label">Image (optional)</label>
+        <input asp-for="Image" type="file" class="form-control" accept="image/*" />
+        <span asp-validation-for="Image" class="text-danger"></span>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Submit Report</button>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

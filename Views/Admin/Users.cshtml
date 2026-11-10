@@ -1,0 +1,94 @@
+@model List<appdevPUPSCOUT.Models.UserRoleViewModel>
+
+@{
+    ViewData["Title"] = "User Management";
+}
+
+<h1>User Management</h1>
+
+@if (TempData["Error"] is string err)
+{
+    <div class="alert alert-danger">@err</div>
+}
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Email</th>
+            <th>Current Role</th>
+            <th>Status</th>
+            <th>Invalid Reports</th>
+            <th>Change Role</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var user in Model)
+        {
+            <tr>
+                <td>@user.Email</td>
+                <td>@string.Join(", ", user.Roles)</td>
+                <td>
+                    @if (user.IsDeactivated)
+                    {
+                        <span class="badge bg-danger">Deactivated</span>
+                    }
+                    else if (user.LockoutEnd.HasValue && user.LockoutEnd > DateTimeOffset.UtcNow)
+                    {
+                        <span class="badge bg-warning text-dark">Suspended until @user.LockoutEnd.Value.ToString("u")</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-success">Active</span>
+                    }
+                </td>
+                <td>
+                    @if (user.InvalidReportCount >= 3)
+                    {
+                        <span class="badge bg-danger">@user.InvalidReportCount (review)</span>
+                    }
+                    else
+                    {
+                        @user.InvalidReportCount
+                    }
+                </td>
+                <td>
+                    <form asp-action="ChangeRole" method="post" class="d-flex gap-2">
+                        <input type="hidden" name="userId" value="@user.UserId" />
+                        <select name="role" class="form-select form-select-sm">
+                            @foreach (var role in user.AllRoles)
+                            {
+                                <option value="@role" selected="@(role == user.SelectedRole ? "selected" : null)">@role</option>
+                            }
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                    </form>
+                </td>
+                <td>
+                    <form asp-action="Suspend" method="post" class="mb-1">
+                        <input type="hidden" name="userId" value="@user.UserId" />
+                        <input type="hidden" name="days" value="7" />
+                        <textarea name="reason" class="form-control form-control-sm mb-1" placeholder="Reason" required></textarea>
+                        <button type="submit" class="btn btn-sm btn-warning">Suspend 7d</button>
+                    </form>
+                    <form asp-action="Suspend" method="post" class="mb-1">
+                        <input type="hidden" name="userId" value="@user.UserId" />
+                        <input type="hidden" name="days" value="30" />
+                        <textarea name="reason" class="form-control form-control-sm mb-1" placeholder="Reason" required></textarea>
+                        <button type="submit" class="btn btn-sm btn-warning">Suspend 30d</button>
+                    </form>
+                    <form asp-action="Deactivate" method="post" class="mb-1">
+                        <input type="hidden" name="userId" value="@user.UserId" />
+                        <textarea name="reason" class="form-control form-control-sm mb-1" placeholder="Reason" required></textarea>
+                        <button type="submit" class="btn btn-sm btn-danger">Deactivate</button>
+                    </form>
+                    <form asp-action="Reactivate" method="post">
+                        <input type="hidden" name="userId" value="@user.UserId" />
+                        <textarea name="reason" class="form-control form-control-sm mb-1" placeholder="Reason" required></textarea>
+                        <button type="submit" class="btn btn-sm btn-success">Reactivate</button>
+                    </form>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
