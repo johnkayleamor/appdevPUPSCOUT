@@ -1,0 +1,179 @@
+@model object
+@{
+    ViewData["Title"] = "Locations";
+    var buildings = (List<appdevPUPSCOUT.Models.Building>)ViewBag.Buildings;
+    var floors = (List<appdevPUPSCOUT.Models.Floor>)ViewBag.Floors;
+    var rooms = (List<appdevPUPSCOUT.Models.Room>)ViewBag.Rooms;
+    var equipment = (List<appdevPUPSCOUT.Models.Equipment>)ViewBag.Equipment;
+}
+
+<h1>Locations</h1>
+
+@if (TempData["Error"] is string err)
+{
+    <div class="alert alert-danger">@err</div>
+}
+
+<h2>Buildings</h2>
+<form asp-action="CreateBuilding" method="post" class="mb-3 d-flex gap-2">
+    <input name="name" class="form-control" placeholder="Building name" />
+    <button class="btn btn-primary">Add</button>
+</form>
+<table class="table table-sm">
+    <thead><tr><th>Name</th><th>Actions</th></tr></thead>
+    <tbody>
+    @foreach (var b in buildings)
+    {
+        <tr>
+            <td>
+                <form asp-action="EditBuilding" method="post" class="d-flex gap-2">
+                    <input type="hidden" name="id" value="@b.Id" />
+                    <input name="name" value="@b.Name" class="form-control form-control-sm" />
+                    <button class="btn btn-sm btn-secondary">Save</button>
+                </form>
+            </td>
+            <td>
+                <form asp-action="DeleteBuilding" method="post">
+                    <input type="hidden" name="id" value="@b.Id" />
+                    <button class="btn btn-sm btn-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<h2>Floors</h2>
+<form asp-action="CreateFloor" method="post" class="mb-3 d-flex gap-2">
+    <input name="name" class="form-control" placeholder="Floor name" />
+    <select name="buildingId" class="form-select">
+        <option value="0">Building</option>
+        @foreach (var b in buildings)
+        {
+            <option value="@b.Id">@b.Name</option>
+        }
+    </select>
+    <button class="btn btn-primary">Add</button>
+</form>
+<table class="table table-sm">
+    <thead><tr><th>Name</th><th>Building</th><th>Actions</th></tr></thead>
+    <tbody>
+    @foreach (var f in floors)
+    {
+        <tr>
+            <td>
+                <form asp-action="EditFloor" method="post" class="d-flex gap-2">
+                    <input type="hidden" name="id" value="@f.Id" />
+                    <input name="name" value="@f.Name" class="form-control form-control-sm" />
+                    <select name="buildingId" class="form-select form-select-sm">
+                        @foreach (var b in buildings)
+                        {
+                            <option value="@b.Id" selected="@(b.Id == f.BuildingId ? "selected" : null)">@b.Name</option>
+                        }
+                    </select>
+                    <button class="btn btn-sm btn-secondary">Save</button>
+                </form>
+            </td>
+            <td>@f.Building?.Name</td>
+            <td>
+                <form asp-action="DeleteFloor" method="post">
+                    <input type="hidden" name="id" value="@f.Id" />
+                    <button class="btn btn-sm btn-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<h2>Rooms</h2>
+<form asp-action="CreateRoom" method="post" class="mb-3 d-flex gap-2">
+    <input name="name" class="form-control" placeholder="Room name" />
+    <select name="floorId" class="form-select">
+        <option value="0">Floor</option>
+        @foreach (var f in floors)
+        {
+            <option value="@f.Id">@f.Building?.Name - @f.Name</option>
+        }
+    </select>
+    <div class="form-check">
+        <input type="checkbox" name="isActive" value="true" class="form-check-input" checked />
+        <label class="form-check-label">Active</label>
+    </div>
+    <button class="btn btn-primary">Add</button>
+</form>
+<table class="table table-sm">
+    <thead><tr><th>Name</th><th>Floor</th><th>Active</th><th>Actions</th></tr></thead>
+    <tbody>
+    @foreach (var r in rooms)
+    {
+        <tr>
+            <td>
+                <form asp-action="EditRoom" method="post" class="d-flex gap-2">
+                    <input type="hidden" name="id" value="@r.Id" />
+                    <input name="name" value="@r.Name" class="form-control form-control-sm" />
+                    <select name="floorId" class="form-select form-select-sm">
+                        @foreach (var f in floors)
+                        {
+                            <option value="@f.Id" selected="@(f.Id == r.FloorId ? "selected" : null)">@f.Building?.Name - @f.Name</option>
+                        }
+                    </select>
+                    <input type="checkbox" name="isActive" value="true" class="form-check-input" checked="@r.IsActive" />
+                    <button class="btn btn-sm btn-secondary">Save</button>
+                </form>
+            </td>
+            <td>@r.Floor?.Building?.Name - @r.Floor?.Name</td>
+            <td>@(r.IsActive ? "Yes" : "No")</td>
+            <td>
+                <form asp-action="DeleteRoom" method="post">
+                    <input type="hidden" name="id" value="@r.Id" />
+                    <button class="btn btn-sm btn-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<h2>Equipment</h2>
+<form asp-action="CreateEquipment" method="post" class="mb-3 d-flex gap-2">
+    <input name="name" class="form-control" placeholder="Equipment name" />
+    <select name="roomId" class="form-select">
+        <option value="0">Room</option>
+        @foreach (var r in rooms)
+        {
+            <option value="@r.Id">@r.Floor?.Building?.Name - @r.Floor?.Name - @r.Name</option>
+        }
+    </select>
+    <button class="btn btn-primary">Add</button>
+</form>
+<table class="table table-sm">
+    <thead><tr><th>Name</th><th>Room</th><th>Actions</th></tr></thead>
+    <tbody>
+    @foreach (var e in equipment)
+    {
+        <tr>
+            <td>
+                <form asp-action="EditEquipment" method="post" class="d-flex gap-2">
+                    <input type="hidden" name="id" value="@e.Id" />
+                    <input name="name" value="@e.Name" class="form-control form-control-sm" />
+                    <select name="roomId" class="form-select form-select-sm">
+                        @foreach (var r in rooms)
+                        {
+                            <option value="@r.Id" selected="@(r.Id == e.RoomId ? "selected" : null)">@r.Floor?.Building?.Name - @r.Floor?.Name - @r.Name</option>
+                        }
+                    </select>
+                    <button class="btn btn-sm btn-secondary">Save</button>
+                </form>
+            </td>
+            <td>@e.Room?.Floor?.Building?.Name - @e.Room?.Floor?.Name - @e.Room?.Name</td>
+            <td>
+                <form asp-action="DeleteEquipment" method="post">
+                    <input type="hidden" name="id" value="@e.Id" />
+                    <button class="btn btn-sm btn-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>

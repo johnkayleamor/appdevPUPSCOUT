@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using appdevPUPSCOUT.Models;
+using appdevPUPSCOUT.Services;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -14,17 +15,21 @@ public class RegisterModel(
     UserManager<ApplicationUser> userManager,
     SignInManager<ApplicationUser> signInManager,
     IEmailSender emailSender,
-    RoleManager<IdentityRole> roleManager) : PageModel
+    RoleManager<IdentityRole> roleManager,
+    OtpService otpService) : PageModel
 {
     private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly SignInManager<ApplicationUser> _signInManager = signInManager;
     private readonly IEmailSender _emailSender = emailSender;
     private readonly RoleManager<IdentityRole> _roleManager = roleManager;
+    private readonly OtpService _otpService = otpService;
 
     [BindProperty]
     public InputModel Input { get; set; } = new();
 
     public string? ReturnUrl { get; set; }
+
+    public bool CodeSent { get; set; }
 
     public class InputModel
     {
@@ -47,6 +52,9 @@ public class RegisterModel(
         [Required]
         [Display(Name = "Role")]
         public string Role { get; set; } = "Student";
+
+        [Display(Name = "Verification code")]
+        public string? Code { get; set; }
     }
 
     public void OnGet(string? returnUrl = null)
@@ -68,9 +76,39 @@ public class RegisterModel(
             ModelState.AddModelError("Input.Role", "Invalid role selection.");
         }
 
+        CodeSent = !string.IsNullOrWhiteSpace(Input.Code);
+
         if (ModelState.IsValid)
         {
-            var user = new ApplicationUser { UserName = Input.Email, Email = Input.Email };
+            if (string.IsNullOrWhiteSpace(Input.Code))
+            {
+                if (await _userManager.FindByEmailAsync(Input.Email) is not null)
+                {
+                    ModelState.AddModelError(string.Empty, "An account with this email already exists.");
+                    return Page();
+                }
+
+                var otp = await _otpService.GenerateAsync(Input.Email, OtpService.EmailConfirmation);
+
+                await _emailSender.SendEmailAsync(
+                    Input.Email,
+                    "Confirm your email",
+                    $"Your verification code is: <b>{otp}</b>. It expires in 10 minutes.");
+
+                CodeSent = true;
+                ModelState.AddModelError(string.Empty, "A verification code has been sent to your email.");
+                return Page();
+            }
+
+            var valid = await _otpService.VerifyAsync(Input.Email, OtpService.EmailConfirmation, Input.Code);
+            if (!valid)
+            {
+                CodeSent = true;
+                ModelState.AddModelError(string.Empty, "Invalid or expired verification code.");
+                return Page();
+            }
+
+            var user = new ApplicationUser { UserName = Input.Email, Email = Input.Email, EmailConfirmed = true };
 
             var result = await _userManager.CreateAsync(user, Input.Password);
             if (result.Succeeded)
@@ -82,25 +120,6 @@ public class RegisterModel(
 
                 await _userManager.AddToRoleAsync(user, Input.Role);
 
-                var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-                code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
-
-                var callbackUrl = Url.Page(
-                    "/Account/ConfirmEmail",
-                    pageHandler: null,
-                    values: new { area = "Identity", userId = user.Id, code },
-                    protocol: Request.Scheme);
-
-                await _emailSender.SendEmailAsync(
-                    Input.Email,
-                    "Confirm your email",
-                    $"Please confirm your account by <a href='{HtmlEncoder.Default.Encode(callbackUrl!)}'>clicking here</a>.");
-
-                if (_userManager.Options.SignIn.RequireConfirmedAccount)
-                {
-                    return RedirectToPage("RegisterConfirmation", new { email = Input.Email, returnUrl });
-                }
-
                 await _signInManager.SignInAsync(user, isPersistent: false);
                 return LocalRedirect(returnUrl);
             }
@@ -111,6 +130,7 @@ public class RegisterModel(
             }
         }
 
+        CodeSent = CodeSent || !string.IsNullOrWhiteSpace(Input.Code);
         return Page();
     }
 }

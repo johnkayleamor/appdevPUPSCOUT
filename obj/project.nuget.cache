@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "L1AOa4Q/Moo=",
+  "dgSpecHash": "jzt67kOqdng=",
   "success": true,
-  "projectFilePath": "c:\\Users\\Dexter\\appdevPUPSCOUT\\appdevPUPSCOUT.csproj",
+  "projectFilePath": "C:\\Users\\Dexter\\appdevPUPSCOUT\\appdevPUPSCOUT.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Dexter\\.nuget\\packages\\humanizer.core\\2.14.1\\humanizer.core.2.14.1.nupkg.sha512",
     "C:\\Users\\Dexter\\.nuget\\packages\\microsoft.aspnetcore.diagnostics.entityframeworkcore\\10.0.13\\microsoft.aspnetcore.diagnostics.entityframeworkcore.10.0.13.nupkg.sha512",

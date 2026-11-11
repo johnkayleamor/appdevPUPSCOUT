@@ -12,6 +12,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Equipment> Equipment => Set<Equipment>();
     public DbSet<Ticket> Tickets => Set<Ticket>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<OtpCode> OtpCodes => Set<OtpCode>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

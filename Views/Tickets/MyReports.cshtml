@@ -1,0 +1,39 @@
+@model List<appdevPUPSCOUT.Models.Ticket>
+@{
+    ViewData["Title"] = "My Reports";
+}
+
+<h1>My Reports</h1>
+
+@if (!Model.Any())
+{
+    <p>No reports submitted yet.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Tracking</th>
+                <th>Category</th>
+                <th>Location</th>
+                <th>Equipment</th>
+                <th>Status</th>
+                <th>Created</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var t in Model)
+        {
+            <tr>
+                <td>@t.TrackingNumber</td>
+                <td>@t.Category</td>
+                <td>@t.Room?.Floor?.Building?.Name - @t.Room?.Floor?.Name - @t.Room?.Name</td>
+                <td>@t.Equipment?.Name</td>
+                <td>@t.Status</td>
+                <td>@t.CreatedAt.ToString("u")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}

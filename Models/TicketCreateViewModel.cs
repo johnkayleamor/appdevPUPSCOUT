@@ -8,6 +8,14 @@ public class TicketCreateViewModel
     public TicketCategory Category { get; set; }
 
     [Required]
+    [Range(1, int.MaxValue, ErrorMessage = "Select a building.")]
+    public int BuildingId { get; set; }
+
+    [Required]
+    [Range(1, int.MaxValue, ErrorMessage = "Select a floor.")]
+    public int FloorId { get; set; }
+
+    [Required]
     [Range(1, int.MaxValue, ErrorMessage = "Select a room.")]
     public int RoomId { get; set; }
 

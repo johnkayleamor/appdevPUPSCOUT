@@ -278,3 +278,4 @@ C:\Users\Dexter\appdevPUPSCOUT\obj\Debug\net10.0\refint\appdevPUPSCOUT.dll
 C:\Users\Dexter\appdevPUPSCOUT\obj\Debug\net10.0\appdevPUPSCOUT.pdb
 C:\Users\Dexter\appdevPUPSCOUT\obj\Debug\net10.0\appdevPUPSCOUT.genruntimeconfig.cache
 C:\Users\Dexter\appdevPUPSCOUT\obj\Debug\net10.0\ref\appdevPUPSCOUT.dll
+C:\Users\Dexter\appdevPUPSCOUT\obj\Debug\net10.0\appdevPUPSCOUT.sourcelink.json

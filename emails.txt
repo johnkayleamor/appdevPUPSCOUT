@@ -22,3 +22,19 @@ To: student@pup.edu.ph
 Subject: Account reactivated
 Your account has been reactivated. Reason: clear test suspension.
 ---
+To: confirmtest@pup.edu.ph
+Subject: Confirm your email
+Please confirm your account by <a href='http://localhost:5236/Identity/Account/ConfirmEmail?userId=077f3cbb-f0a9-40e1-9490-f6858e86d878&amp;code=Q2ZESjhEZkJGSm9OZWxaSnB5UUtCNE9KMTJoUGdRcmRGOVBjbTNrRjhIcDAwR0RRZnVoaUYrbytJQjcwenVJbVRpNUtvaHIvK1d3WUk5K2hiai84VUQyZnFMOFA2aG9xK3EwVmFNSFJpTWRLTTY3aWQ2Wk1yclVIYjI1SlI5SnByQ1dtaEFqZGxVQi94OG1KRUZYZ1NtYjZMcjBxWnJXaTJHNkE2QllQN2RwT2huNHJPZERWN1p1MFp1QzIwQWZZbUlHSjN4TmJKS05JcTVhZjZUQ2hjQm9VRldKeUg5bHRDY1I1dWkwdnhKb1NlN2tIaUdtUHlobk41MGxpN2p5TmJheis2UT09'>clicking here</a>.
+---
+To: testuser2@pup.edu.ph
+Subject: Confirm your email
+Your verification code is: <b>222653</b>. It expires in 10 minutes.
+---
+To: testuser3@pup.edu.ph
+Subject: Confirm your email
+Your verification code is: <b>598736</b>. It expires in 10 minutes.
+---
+To: testuser4@pup.edu.ph
+Subject: Confirm your email
+Your verification code is: <b>179555</b>. It expires in 10 minutes.
+---

@@ -16,12 +16,36 @@
     </div>
 
     <div class="mb-3">
+        <label class="form-label">Building</label>
+        <select asp-for="BuildingId" class="form-select" id="BuildingId">
+            <option value="0">Select building</option>
+            @foreach (var b in (List<appdevPUPSCOUT.Models.Building>)ViewBag.Buildings)
+            {
+                <option value="@b.Id">@b.Name</option>
+            }
+        </select>
+        <span asp-validation-for="BuildingId" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Floor</label>
+        <select asp-for="FloorId" class="form-select" id="FloorId">
+            <option value="0">Select floor</option>
+            @foreach (var f in (List<appdevPUPSCOUT.Models.Floor>)ViewBag.Floors)
+            {
+                <option value="@f.Id" data-building="@f.BuildingId">@f.Building?.Name - @f.Name</option>
+            }
+        </select>
+        <span asp-validation-for="FloorId" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
         <label asp-for="RoomId" class="form-label">Room</label>
-        <select asp-for="RoomId" class="form-select">
-            <option value="">Select room</option>
+        <select asp-for="RoomId" class="form-select" id="RoomId">
+            <option value="0">Select room</option>
             @foreach (var room in (List<appdevPUPSCOUT.Models.Room>)ViewBag.Rooms)
             {
-                <option value="@room.Id">@room.Name</option>
+                <option value="@room.Id" data-floor="@room.FloorId">@room.Floor?.Building?.Name - @room.Floor?.Name - @room.Name</option>
             }
         </select>
         <span asp-validation-for="RoomId" class="text-danger"></span>
@@ -29,11 +53,11 @@
 
     <div class="mb-3">
         <label asp-for="EquipmentId" class="form-label">Equipment</label>
-        <select asp-for="EquipmentId" class="form-select">
-            <option value="">Select equipment</option>
+        <select asp-for="EquipmentId" class="form-select" id="EquipmentId">
+            <option value="0">Select equipment</option>
             @foreach (var eq in (List<appdevPUPSCOUT.Models.Equipment>)ViewBag.Equipment)
             {
-                <option value="@eq.Id">@eq.Name</option>
+                <option value="@eq.Id" data-room="@eq.RoomId">@eq.Room?.Floor?.Building?.Name - @eq.Room?.Floor?.Name - @eq.Room?.Name - @eq.Name</option>
             }
         </select>
         <span asp-validation-for="EquipmentId" class="text-danger"></span>
@@ -56,4 +80,39 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            const building = document.getElementById('BuildingId');
+            const floor = document.getElementById('FloorId');
+            const room = document.getElementById('RoomId');
+            const equipment = document.getElementById('EquipmentId');
+
+            function filter(select, attr, value) {
+                Array.from(select.options).forEach(opt => {
+                    if (opt.value === '0') { opt.hidden = false; return; }
+                    opt.hidden = opt.getAttribute(attr) !== String(value);
+                });
+                if (select.selectedOptions.length && select.selectedOptions[0].hidden) {
+                    select.value = '0';
+                }
+            }
+
+            building.addEventListener('change', function () {
+                filter(floor, 'data-building', this.value);
+                floor.dispatchEvent(new Event('change'));
+            });
+            floor.addEventListener('change', function () {
+                filter(room, 'data-floor', this.value);
+                room.dispatchEvent(new Event('change'));
+            });
+            room.addEventListener('change', function () {
+                filter(equipment, 'data-room', this.value);
+            });
+
+            // initial
+            filter(floor, 'data-building', building.value);
+            filter(room, 'data-floor', floor.value);
+            filter(equipment, 'data-room', room.value);
+        })();
+    </script>
 }

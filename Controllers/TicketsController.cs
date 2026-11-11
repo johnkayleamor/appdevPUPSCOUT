@@ -18,12 +18,29 @@ public class TicketsController(
     private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly IWebHostEnvironment _environment = environment;
 
-    [EnableRateLimiting("ReportSubmission")]
     public IActionResult Create()
     {
-        ViewBag.Rooms = _dbContext.Rooms.OrderBy(r => r.Name).ToList();
-        ViewBag.Equipment = _dbContext.Equipment.OrderBy(e => e.Name).ToList();
+        ViewBag.Buildings = _dbContext.Buildings.OrderBy(b => b.Name).ToList();
+        ViewBag.Floors = _dbContext.Floors.Include(f => f.Building).OrderBy(f => f.Name).ToList();
+        ViewBag.Rooms = _dbContext.Rooms.Include(r => r.Floor).ThenInclude(f => f.Building).OrderBy(r => r.Name).ToList();
+        ViewBag.Equipment = _dbContext.Equipment.Include(e => e.Room).OrderBy(e => e.Name).ToList();
         return View(new TicketCreateViewModel());
+    }
+
+    public async Task<IActionResult> MyReports()
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null) return Challenge();
+
+        var tickets = await _dbContext.Tickets
+            .AsNoTracking()
+            .Include(t => t.Room).ThenInclude(r => r.Floor).ThenInclude(f => f.Building)
+            .Include(t => t.Equipment)
+            .Where(t => t.ReporterId == user.Id)
+            .OrderByDescending(t => t.CreatedAt)
+            .ToListAsync();
+
+        return View(tickets);
     }
 
     [HttpPost]
@@ -46,8 +63,10 @@ public class TicketsController(
 
         if (!ModelState.IsValid)
         {
-            ViewBag.Rooms = _dbContext.Rooms.OrderBy(r => r.Name).ToList();
-            ViewBag.Equipment = _dbContext.Equipment.OrderBy(e => e.Name).ToList();
+            ViewBag.Buildings = _dbContext.Buildings.OrderBy(b => b.Name).ToList();
+            ViewBag.Floors = _dbContext.Floors.Include(f => f.Building).OrderBy(f => f.Name).ToList();
+            ViewBag.Rooms = _dbContext.Rooms.Include(r => r.Floor).ThenInclude(f => f.Building).OrderBy(r => r.Name).ToList();
+            ViewBag.Equipment = _dbContext.Equipment.Include(e => e.Room).OrderBy(e => e.Name).ToList();
             return View(model);
         }
 

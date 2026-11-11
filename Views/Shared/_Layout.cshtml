@@ -31,11 +31,17 @@
                             <li class="nav-item">
                                 <a class="nav-link text-dark" asp-area="" asp-controller="Tickets" asp-action="Create">Submit Report</a>
                             </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-area="" asp-controller="Tickets" asp-action="MyReports">My Reports</a>
+                            </li>
                         }
                         @if (User.IsInRole("Admin"))
                         {
                             <li class="nav-item">
                                 <a class="nav-link text-dark" asp-area="" asp-controller="Admin" asp-action="Users">User Management</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-area="" asp-controller="Admin" asp-action="Locations">Locations</a>
                             </li>
                         }
                     </ul>
@@ -45,6 +51,14 @@
         </nav>
     </header>
     <div class="container">
+        @if (TempData["Message"] is string msg)
+        {
+            <div class="alert alert-success mt-2">@msg</div>
+        }
+        @if (TempData["Error"] is string err)
+        {
+            <div class="alert alert-danger mt-2">@err</div>
+        }
         <main role="main" class="pb-3">
             @RenderBody()
         </main>

@@ -86,6 +86,12 @@ public class AdminController(
             return NotFound();
         }
 
+        if (days <= 0)
+        {
+            TempData["Error"] = "Suspension days must be greater than zero.";
+            return RedirectToAction(nameof(Users));
+        }
+
         var until = DateTimeOffset.UtcNow.AddDays(days);
         await _userManager.SetLockoutEndDateAsync(user, until);
 
@@ -121,6 +127,175 @@ public class AdminController(
             $"Your account has been deactivated. Reason: {reason}. To appeal, contact admin@pup.edu.ph.");
 
         return RedirectToAction(nameof(Users));
+    }
+
+    public IActionResult Locations()
+    {
+        ViewBag.Buildings = _dbContext.Buildings.OrderBy(b => b.Name).ToList();
+        ViewBag.Floors = _dbContext.Floors.Include(f => f.Building).OrderBy(f => f.Name).ToList();
+        ViewBag.Rooms = _dbContext.Rooms.Include(r => r.Floor).ThenInclude(f => f.Building).OrderBy(r => r.Name).ToList();
+        ViewBag.Equipment = _dbContext.Equipment.Include(e => e.Room).OrderBy(e => e.Name).ToList();
+        return View();
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateBuilding(string name)
+    {
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            _dbContext.Buildings.Add(new Building { Name = name.Trim() });
+            await _dbContext.SaveChangesAsync();
+        }
+        return RedirectToAction(nameof(Locations));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditBuilding(int id, string name)
+    {
+        var building = await _dbContext.Buildings.FindAsync(id);
+        if (building is not null && !string.IsNullOrWhiteSpace(name))
+        {
+            building.Name = name.Trim();
+            await _dbContext.SaveChangesAsync();
+        }
+        return RedirectToAction(nameof(Locations));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteBuilding(int id)
+    {
+        var building = await _dbContext.Buildings.Include(b => b.Floors).FirstOrDefaultAsync(b => b.Id == id);
+        if (building is not null)
+        {
+            _dbContext.Buildings.Remove(building);
+            try { await _dbContext.SaveChangesAsync(); }
+            catch { TempData["Error"] = "Cannot delete building in use."; }
+        }
+        return RedirectToAction(nameof(Locations));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateFloor(string name, int buildingId)
+    {
+        if (!string.IsNullOrWhiteSpace(name) && buildingId > 0)
+        {
+            _dbContext.Floors.Add(new Floor { Name = name.Trim(), BuildingId = buildingId });
+            await _dbContext.SaveChangesAsync();
+        }
+        return RedirectToAction(nameof(Locations));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditFloor(int id, string name, int buildingId)
+    {
+        var floor = await _dbContext.Floors.FindAsync(id);
+        if (floor is not null && !string.IsNullOrWhiteSpace(name) && buildingId > 0)
+        {
+            floor.Name = name.Trim();
+            floor.BuildingId = buildingId;
+            await _dbContext.SaveChangesAsync();
+        }
+        return RedirectToAction(nameof(Locations));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteFloor(int id)
+    {
+        var floor = await _dbContext.Floors.Include(f => f.Rooms).FirstOrDefaultAsync(f => f.Id == id);
+        if (floor is not null)
+        {
+            _dbContext.Floors.Remove(floor);
+            try { await _dbContext.SaveChangesAsync(); }
+            catch { TempData["Error"] = "Cannot delete floor in use."; }
+        }
+        return RedirectToAction(nameof(Locations));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateRoom(string name, int floorId, bool isActive)
+    {
+        if (!string.IsNullOrWhiteSpace(name) && floorId > 0)
+        {
+            _dbContext.Rooms.Add(new Room { Name = name.Trim(), FloorId = floorId, IsActive = isActive });
+            await _dbContext.SaveChangesAsync();
+        }
+        return RedirectToAction(nameof(Locations));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditRoom(int id, string name, int floorId, bool isActive)
+    {
+        var room = await _dbContext.Rooms.FindAsync(id);
+        if (room is not null && !string.IsNullOrWhiteSpace(name) && floorId > 0)
+        {
+            room.Name = name.Trim();
+            room.FloorId = floorId;
+            room.IsActive = isActive;
+            await _dbContext.SaveChangesAsync();
+        }
+        return RedirectToAction(nameof(Locations));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteRoom(int id)
+    {
+        var room = await _dbContext.Rooms.Include(r => r.Equipment).FirstOrDefaultAsync(r => r.Id == id);
+        if (room is not null)
+        {
+            _dbContext.Rooms.Remove(room);
+            try { await _dbContext.SaveChangesAsync(); }
+            catch { TempData["Error"] = "Cannot delete room in use."; }
+        }
+        return RedirectToAction(nameof(Locations));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateEquipment(string name, int roomId)
+    {
+        if (!string.IsNullOrWhiteSpace(name) && roomId > 0)
+        {
+            _dbContext.Equipment.Add(new Equipment { Name = name.Trim(), RoomId = roomId });
+            await _dbContext.SaveChangesAsync();
+        }
+        return RedirectToAction(nameof(Locations));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditEquipment(int id, string name, int roomId)
+    {
+        var eq = await _dbContext.Equipment.FindAsync(id);
+        if (eq is not null && !string.IsNullOrWhiteSpace(name) && roomId > 0)
+        {
+            eq.Name = name.Trim();
+            eq.RoomId = roomId;
+            await _dbContext.SaveChangesAsync();
+        }
+        return RedirectToAction(nameof(Locations));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteEquipment(int id)
+    {
+        var eq = await _dbContext.Equipment.FindAsync(id);
+        if (eq is not null)
+        {
+            _dbContext.Equipment.Remove(eq);
+            try { await _dbContext.SaveChangesAsync(); }
+            catch { TempData["Error"] = "Cannot delete equipment in use."; }
+        }
+        return RedirectToAction(nameof(Locations));
     }
 
     [HttpPost]

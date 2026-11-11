@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "c:\\Users\\Dexter\\appdevPUPSCOUT\\appdevPUPSCOUT.csproj": {}
+    "C:\\Users\\Dexter\\appdevPUPSCOUT\\appdevPUPSCOUT.csproj": {}
   },
   "projects": {
-    "c:\\Users\\Dexter\\appdevPUPSCOUT\\appdevPUPSCOUT.csproj": {
+    "C:\\Users\\Dexter\\appdevPUPSCOUT\\appdevPUPSCOUT.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "c:\\Users\\Dexter\\appdevPUPSCOUT\\appdevPUPSCOUT.csproj",
+        "projectUniqueName": "C:\\Users\\Dexter\\appdevPUPSCOUT\\appdevPUPSCOUT.csproj",
         "projectName": "appdevPUPSCOUT",
-        "projectPath": "c:\\Users\\Dexter\\appdevPUPSCOUT\\appdevPUPSCOUT.csproj",
+        "projectPath": "C:\\Users\\Dexter\\appdevPUPSCOUT\\appdevPUPSCOUT.csproj",
         "packagesPath": "C:\\Users\\Dexter\\.nuget\\packages\\",
-        "outputPath": "c:\\Users\\Dexter\\appdevPUPSCOUT\\obj\\",
+        "outputPath": "C:\\Users\\Dexter\\appdevPUPSCOUT\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

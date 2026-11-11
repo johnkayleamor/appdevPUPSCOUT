@@ -24,6 +24,7 @@ builder.Services.AddDefaultIdentity<ApplicationUser>(options =>
     .AddEntityFrameworkStores<ApplicationDbContext>();
 
 builder.Services.AddTransient<Microsoft.AspNetCore.Identity.UI.Services.IEmailSender, appdevPUPSCOUT.Services.EmailSender>();
+builder.Services.AddScoped<appdevPUPSCOUT.Services.OtpService>();
 builder.Services.AddHostedService<appdevPUPSCOUT.Services.SuspensionCleanupService>();
 
 builder.Services.ConfigureApplicationCookie(options =>
@@ -38,9 +39,9 @@ builder.Services.AddRateLimiter(options =>
 {
     options.AddPolicy("ReportSubmission", context =>
     {
-        var key = context.User.Identity?.IsAuthenticated == true
-            ? context.User.Identity.Name!
-            : context.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+var key = context.User.Identity?.IsAuthenticated == true
+    ? context.User.Identity?.Name ?? "authenticated"
+    : context.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
 
         return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
         {
@@ -77,6 +78,7 @@ else
 app.UseHttpsRedirection();
 app.UseRouting();
 
+app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
 
