@@ -1,0 +1,132 @@
+@{
+    ViewData["Title"] = "Floor Map";
+    var buildings = (List<appdevPUPSCOUT.Models.Building>)ViewBag.Buildings;
+    var floors = (List<appdevPUPSCOUT.Models.Floor>)ViewBag.Floors;
+    var rooms = (List<appdevPUPSCOUT.Models.Room>)ViewBag.Rooms;
+    var statuses = (Dictionary<int, string>)ViewBag.RoomStatuses;
+    var selectedBuildingId = (int)ViewBag.SelectedBuildingId;
+    var selectedFloorId = (int)ViewBag.SelectedFloorId;
+}
+
+<style>
+    button, .btn { min-height: 44px; }
+    @@media (max-width: 768px) {
+        #roomPanel { position: fixed; left: 0; right: 0; bottom: 0; margin: 0; border-radius: 12px 12px 0 0; z-index: 1050; max-width: 100% !important; }
+    }
+</style>
+<h1>Floor Map</h1>
+<p><a class="btn btn-outline-secondary" href="/Tickets/Create" style="min-height:44px;">List view</a></p>
+
+<form method="get" asp-action="Map" class="mb-3 d-flex gap-2 flex-wrap">
+    <select name="buildingId" class="form-select" style="max-width:240px;">
+        @foreach (var b in buildings)
+        {
+            <option value="@b.Id" selected="@(b.Id == selectedBuildingId)">@b.Name</option>
+        }
+    </select>
+    <select name="floorId" class="form-select" style="max-width:240px;">
+        @foreach (var f in floors.Where(f => f.BuildingId == selectedBuildingId))
+        {
+            <option value="@f.Id" selected="@(f.Id == selectedFloorId)">@f.Building?.Name - @f.Name</option>
+        }
+    </select>
+    <button class="btn btn-primary">Go</button>
+</form>
+
+<div class="d-flex flex-wrap gap-3 mb-3">
+    <span><span class="badge bg-success">&nbsp;</span> No open reports</span>
+    <span><span class="badge bg-warning text-dark">&nbsp;</span> In progress</span>
+    <span><span class="badge bg-danger">&nbsp;</span> Unresolved</span>
+</div>
+
+<div id="mapContainer" style="overflow:hidden; touch-action:none; max-width:620px; border:1px solid #ccc;">
+<svg id="floorSvg" width="100%" height="420" viewBox="0 0 620 420" style="transform-origin:0 0;">
+    @{
+        int i = 0;
+        foreach (var r in rooms)
+        {
+            int col = i % 4;
+            int row = i / 4;
+            int x = col * 150 + 10;
+            int y = row * 110 + 10;
+            string fill = statuses[r.Id] == "No open reports" ? "#198754" : statuses[r.Id] == "In progress" ? "#ffc107" : "#dc3545";
+            <g class="room-shape" data-room-id="@r.Id" style="cursor:pointer;">
+                <rect x="@x" y="@y" width="140" height="90" fill="@fill" stroke="#333" rx="6" />
+                <text x="@(x+70)" y="@(y+45)" text-anchor="middle" fill="#fff" font-size="12">@r.Name</text>
+                <text x="@(x+70)" y="@(y+62)" text-anchor="middle" fill="#fff" font-size="10">@statuses[r.Id]</text>
+            </g>
+            i++;
+        }
+    }
+</svg>
+</div>
+
+<div id="roomPanel" class="card mt-3" style="display:none; max-width:620px;">
+    <div class="card-body">
+        <h5 id="panelTitle"></h5>
+        <p id="panelStatus"></p>
+        <ul id="panelEquipment"></ul>
+        <div class="d-flex gap-2">
+            <a id="viewTicketBtn" class="btn btn-secondary" href="/Tickets/MyReports" style="min-height:44px;">View ticket</a>
+            <a id="reportBtn" class="btn btn-primary" href="/Tickets/Create" style="min-height:44px;">Report a problem</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    const roomData = @Html.Raw(ViewBag.RoomDataJson);
+    const selectedBuildingId = @selectedBuildingId;
+    const selectedFloorId = @selectedFloorId;
+
+    document.querySelectorAll('.room-shape').forEach(shape => {
+        shape.addEventListener('click', function () {
+            const roomId = parseInt(this.getAttribute('data-room-id'));
+            const data = roomData.find(r => r.id === roomId);
+            if (!data) return;
+            document.getElementById('panelTitle').textContent = data.name;
+            document.getElementById('panelStatus').textContent = data.status;
+            const ul = document.getElementById('panelEquipment');
+            ul.innerHTML = '';
+            data.equipment.forEach(e => {
+                const li = document.createElement('li');
+                li.textContent = e.name + (e.hasOpen ? ' (open report)' : ' (no open reports)');
+                ul.appendChild(li);
+            });
+            document.getElementById('viewTicketBtn').href = '/Tickets/MyReports';
+            document.getElementById('reportBtn').href = '/Tickets/Create?buildingId=' + selectedBuildingId + '&floorId=' + selectedFloorId + '&roomId=' + roomId;
+            document.getElementById('roomPanel').style.display = 'block';
+        });
+    });
+
+    const mapContainer = document.getElementById('mapContainer');
+    const floorSvg = document.getElementById('floorSvg');
+    let currentScale = 1;
+    let lastPinchDistance = 0;
+    function pinchDistance(touches) {
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.hypot(dx, dy);
+    }
+    mapContainer.addEventListener('touchstart', function (e) {
+        if (e.touches.length === 2) {
+            lastPinchDistance = pinchDistance(e.touches);
+        }
+    }, { passive: true });
+    mapContainer.addEventListener('touchmove', function (e) {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            const newDistance = pinchDistance(e.touches);
+            if (lastPinchDistance > 0) {
+                currentScale *= newDistance / lastPinchDistance;
+                currentScale = Math.min(Math.max(currentScale, 0.5), 4);
+                floorSvg.style.transform = 'scale(' + currentScale + ')';
+            }
+            lastPinchDistance = newDistance;
+        }
+    }, { passive: false });
+    mapContainer.addEventListener('touchend', function (e) {
+        if (e.touches.length < 2) {
+            lastPinchDistance = 0;
+        }
+    }, { passive: true });
+</script>

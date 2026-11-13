@@ -24,5 +24,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(t => t.EquipmentId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<Ticket>().HasOne(t => t.Reporter).WithMany()
             .HasForeignKey(t => t.ReporterId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Building>().HasData(new Building { Id = 1, Name = "Main Building" });
+        builder.Entity<Floor>().HasData(new Floor { Id = 1, Name = "1st Floor", BuildingId = 1 });
+        builder.Entity<Room>().HasData(new Room { Id = 1, Name = "Room 101", IsActive = true, FloorId = 1 });
+        builder.Entity<Equipment>().HasData(new Equipment { Id = 1, Name = "Projector", RoomId = 1 });
     }
 }

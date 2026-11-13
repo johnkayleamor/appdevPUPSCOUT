@@ -39,9 +39,9 @@ builder.Services.AddRateLimiter(options =>
 {
     options.AddPolicy("ReportSubmission", context =>
     {
-var key = context.User.Identity?.IsAuthenticated == true
-    ? context.User.Identity?.Name ?? "authenticated"
-    : context.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+        var key = context.User.Identity?.IsAuthenticated == true
+            ? context.User.Identity?.Name ?? "authenticated"
+            : context.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
 
         return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
         {

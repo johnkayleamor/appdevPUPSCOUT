@@ -251,9 +251,19 @@ public class AdminController(
         var room = await _dbContext.Rooms.Include(r => r.Equipment).FirstOrDefaultAsync(r => r.Id == id);
         if (room is not null)
         {
-            _dbContext.Rooms.Remove(room);
-            try { await _dbContext.SaveChangesAsync(); }
-            catch { TempData["Error"] = "Cannot delete room in use."; }
+            var hasTickets = await _dbContext.Tickets.AnyAsync(t => t.RoomId == id);
+            if (hasTickets)
+            {
+                room.IsActive = false;
+                await _dbContext.SaveChangesAsync();
+                TempData["Message"] = "Room has existing tickets and was marked inactive.";
+            }
+            else
+            {
+                _dbContext.Rooms.Remove(room);
+                try { await _dbContext.SaveChangesAsync(); }
+                catch { TempData["Error"] = "Cannot delete room in use."; }
+            }
         }
         return RedirectToAction(nameof(Locations));
     }

@@ -21,7 +21,7 @@
             <option value="0">Select building</option>
             @foreach (var b in (List<appdevPUPSCOUT.Models.Building>)ViewBag.Buildings)
             {
-                <option value="@b.Id">@b.Name</option>
+                <option value="@b.Id" selected="@(b.Id == Model.BuildingId)">@b.Name</option>
             }
         </select>
         <span asp-validation-for="BuildingId" class="text-danger"></span>
@@ -33,7 +33,7 @@
             <option value="0">Select floor</option>
             @foreach (var f in (List<appdevPUPSCOUT.Models.Floor>)ViewBag.Floors)
             {
-                <option value="@f.Id" data-building="@f.BuildingId">@f.Building?.Name - @f.Name</option>
+                <option value="@f.Id" data-building="@f.BuildingId" selected="@(f.Id == Model.FloorId)">@f.Building?.Name - @f.Name</option>
             }
         </select>
         <span asp-validation-for="FloorId" class="text-danger"></span>
@@ -45,10 +45,14 @@
             <option value="0">Select room</option>
             @foreach (var room in (List<appdevPUPSCOUT.Models.Room>)ViewBag.Rooms)
             {
-                <option value="@room.Id" data-floor="@room.FloorId">@room.Floor?.Building?.Name - @room.Floor?.Name - @room.Name</option>
+                <option value="@room.Id" data-floor="@room.FloorId" data-status="@(room.IsActive ? "Active" : "Inactive")" selected="@(room.Id == Model.RoomId)">@room.Floor?.Building?.Name - @room.Floor?.Name - @room.Name (@(room.IsActive ? "Active" : "Inactive"))</option>
             }
         </select>
         <span asp-validation-for="RoomId" class="text-danger"></span>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Rooms on selected floor</label>
+        <div id="RoomList" class="d-flex flex-wrap gap-2"></div>
     </div>
 
     <div class="mb-3">
@@ -57,7 +61,7 @@
             <option value="0">Select equipment</option>
             @foreach (var eq in (List<appdevPUPSCOUT.Models.Equipment>)ViewBag.Equipment)
             {
-                <option value="@eq.Id" data-room="@eq.RoomId">@eq.Room?.Floor?.Building?.Name - @eq.Room?.Floor?.Name - @eq.Room?.Name - @eq.Name</option>
+                <option value="@eq.Id" data-room="@eq.RoomId" selected="@(eq.Id == Model.EquipmentId)">@eq.Room?.Floor?.Building?.Name - @eq.Room?.Floor?.Name - @eq.Room?.Name - @eq.Name</option>
             }
         </select>
         <span asp-validation-for="EquipmentId" class="text-danger"></span>
@@ -86,33 +90,80 @@
             const floor = document.getElementById('FloorId');
             const room = document.getElementById('RoomId');
             const equipment = document.getElementById('EquipmentId');
+            const roomList = document.getElementById('RoomList');
 
-            function filter(select, attr, value) {
-                Array.from(select.options).forEach(opt => {
-                    if (opt.value === '0') { opt.hidden = false; return; }
-                    opt.hidden = opt.getAttribute(attr) !== String(value);
+            async function loadFloors(selectedId) {
+                const bId = building.value;
+                floor.innerHTML = '<option value="0">Select floor</option>';
+                if (!bId || bId === '0') return;
+                const res = await fetch('/Tickets/GetFloors?buildingId=' + encodeURIComponent(bId));
+                const data = await res.json();
+                data.forEach(f => {
+                    const opt = new Option(f.name, f.id);
+                    if (String(f.id) === String(selectedId)) opt.selected = true;
+                    floor.add(opt);
                 });
-                if (select.selectedOptions.length && select.selectedOptions[0].hidden) {
-                    select.value = '0';
-                }
             }
 
-            building.addEventListener('change', function () {
-                filter(floor, 'data-building', this.value);
-                floor.dispatchEvent(new Event('change'));
+            async function loadRooms(selectedId) {
+                const fId = floor.value;
+                room.innerHTML = '<option value="0">Select room</option>';
+                roomList.innerHTML = '';
+                if (!fId || fId === '0') return;
+                const res = await fetch('/Tickets/GetRooms?floorId=' + encodeURIComponent(fId));
+                const data = await res.json();
+                data.forEach(r => {
+                    const opt = new Option(r.name + ' (' + r.status + ')', r.id);
+                    if (String(r.id) === String(selectedId)) opt.selected = true;
+                    if (!r.isActive) opt.disabled = true;
+                    room.add(opt);
+
+                    const badge = document.createElement(r.isActive ? 'a' : 'span');
+                    if (r.isActive) {
+                        badge.href = '/Tickets/Create?buildingId=' + encodeURIComponent(building.value) + '&floorId=' + encodeURIComponent(floor.value) + '&roomId=' + encodeURIComponent(r.id);
+                        badge.className = 'badge bg-success text-decoration-none';
+                    } else {
+                        badge.className = 'badge bg-secondary';
+                    }
+                    badge.textContent = r.name + ' - ' + r.status;
+                    roomList.appendChild(badge);
+                });
+            }
+
+            async function loadEquipment(selectedId) {
+                const rId = room.value;
+                equipment.innerHTML = '<option value="0">Select equipment</option>';
+                if (!rId || rId === '0') return;
+                const res = await fetch('/Tickets/GetEquipment?roomId=' + encodeURIComponent(rId));
+                const data = await res.json();
+                data.forEach(e => {
+                    const opt = new Option(e.name, e.id);
+                    if (String(e.id) === String(selectedId)) opt.selected = true;
+                    equipment.add(opt);
+                });
+            }
+
+            building.addEventListener('change', async function () {
+                await loadFloors(0);
+                await loadRooms(0);
+                await loadEquipment(0);
             });
-            floor.addEventListener('change', function () {
-                filter(room, 'data-floor', this.value);
-                room.dispatchEvent(new Event('change'));
+            floor.addEventListener('change', async function () {
+                await loadRooms(0);
+                await loadEquipment(0);
             });
-            room.addEventListener('change', function () {
-                filter(equipment, 'data-room', this.value);
+            room.addEventListener('change', async function () {
+                await loadEquipment(0);
             });
 
-            // initial
-            filter(floor, 'data-building', building.value);
-            filter(room, 'data-floor', floor.value);
-            filter(equipment, 'data-room', room.value);
+            (async function init() {
+                const initialFloor = '@Model.FloorId';
+                const initialRoom = '@Model.RoomId';
+                const initialEquipment = '@Model.EquipmentId';
+                await loadFloors(initialFloor);
+                await loadRooms(initialRoom);
+                await loadEquipment(initialEquipment);
+            })();
         })();
     </script>
 }
