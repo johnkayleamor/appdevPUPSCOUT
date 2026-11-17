@@ -66,6 +66,11 @@
         </select>
         <span asp-validation-for="EquipmentId" class="text-danger"></span>
     </div>
+    <div id="similarWarning" class="alert alert-warning d-none">
+        A similar open report exists for this room and equipment:
+        <a id="similarLink" href="#" target="_blank">View ticket</a>.
+        You can still submit a new report.
+    </div>
 
     <div class="mb-3">
         <label asp-for="Description" class="form-label"></label>
@@ -74,9 +79,9 @@
     </div>
 
     <div class="mb-3">
-        <label asp-for="Image" class="form-label">Image (optional)</label>
-        <input asp-for="Image" type="file" class="form-control" accept="image/*" />
-        <span asp-validation-for="Image" class="text-danger"></span>
+        <label asp-for="Photos" class="form-label">Photos (optional)</label>
+        <input asp-for="Photos" type="file" class="form-control" accept="image/*" multiple />
+        <span asp-validation-for="Photos" class="text-danger"></span>
     </div>
 
     <button type="submit" class="btn btn-primary">Submit Report</button>
@@ -84,6 +89,37 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            const input = document.querySelector('input[name="Photos"]');
+            if (!input) return;
+            input.addEventListener('change', async function () {
+                const files = Array.from(input.files || []);
+                if (!files.length) return;
+                const compressed = [];
+                for (const file of files) {
+                    if (!file.type.startsWith('image/')) { compressed.push(file); continue; }
+                    const img = await new Promise((resolve, reject) => {
+                        const i = new Image();
+                        i.onload = () => resolve(i);
+                        i.onerror = reject;
+                        i.src = URL.createObjectURL(file);
+                    });
+                    const scale = Math.min(1, 1280 / img.width);
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.round(img.width * scale);
+                    canvas.height = Math.round(img.height * scale);
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+                    compressed.push(new File([blob], file.name.replace(/\\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+                }
+                const dt = new DataTransfer();
+                compressed.forEach(f => dt.items.add(f));
+                input.files = dt.files;
+            });
+        })();
+    </script>
     <script>
         (function () {
             const building = document.getElementById('BuildingId');
@@ -141,6 +177,23 @@
                     if (String(e.id) === String(selectedId)) opt.selected = true;
                     equipment.add(opt);
                 });
+                await checkSimilar();
+            }
+
+            async function checkSimilar() {
+                const warning = document.getElementById('similarWarning');
+                const link = document.getElementById('similarLink');
+                const rId = room.value;
+                const eId = equipment.value;
+                warning.classList.add('d-none');
+                if (!rId || rId === '0' || !eId || eId === '0') return;
+                const res = await fetch('/Tickets/GetOpenTickets?roomId=' + encodeURIComponent(rId) + '&equipmentId=' + encodeURIComponent(eId));
+                const data = await res.json();
+                if (data && data.length) {
+                    link.href = '/Tickets/Details/' + data[0].id;
+                    link.textContent = data[0].trackingNumber + ' (' + data[0].status + ')';
+                    warning.classList.remove('d-none');
+                }
             }
 
             building.addEventListener('change', async function () {
@@ -155,6 +208,7 @@
             room.addEventListener('change', async function () {
                 await loadEquipment(0);
             });
+            equipment.addEventListener('change', checkSimilar);
 
             (async function init() {
                 const initialFloor = '@Model.FloorId';

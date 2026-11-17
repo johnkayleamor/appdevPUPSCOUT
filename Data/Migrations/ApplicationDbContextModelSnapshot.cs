@@ -263,6 +263,13 @@ namespace appdevPUPSCOUT.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Buildings");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Name = "Main Building"
+                        });
                 });
 
             modelBuilder.Entity("appdevPUPSCOUT.Models.Equipment", b =>
@@ -283,6 +290,14 @@ namespace appdevPUPSCOUT.Data.Migrations
                     b.HasIndex("RoomId");
 
                     b.ToTable("Equipment");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Name = "Projector",
+                            RoomId = 1
+                        });
                 });
 
             modelBuilder.Entity("appdevPUPSCOUT.Models.Floor", b =>
@@ -303,6 +318,14 @@ namespace appdevPUPSCOUT.Data.Migrations
                     b.HasIndex("BuildingId");
 
                     b.ToTable("Floors");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            BuildingId = 1,
+                            Name = "1st Floor"
+                        });
                 });
 
             modelBuilder.Entity("appdevPUPSCOUT.Models.OtpCode", b =>
@@ -358,6 +381,15 @@ namespace appdevPUPSCOUT.Data.Migrations
                     b.HasIndex("FloorId");
 
                     b.ToTable("Rooms");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            FloorId = 1,
+                            IsActive = true,
+                            Name = "Room 101"
+                        });
                 });
 
             modelBuilder.Entity("appdevPUPSCOUT.Models.Ticket", b =>
@@ -365,6 +397,9 @@ namespace appdevPUPSCOUT.Data.Migrations
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("AssigneeId")
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("Category")
                         .HasColumnType("INTEGER");
@@ -377,6 +412,9 @@ namespace appdevPUPSCOUT.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<int>("EquipmentId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Priority")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("ReporterId")
@@ -395,6 +433,8 @@ namespace appdevPUPSCOUT.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AssigneeId");
+
                     b.HasIndex("EquipmentId");
 
                     b.HasIndex("ReporterId");
@@ -402,6 +442,85 @@ namespace appdevPUPSCOUT.Data.Migrations
                     b.HasIndex("RoomId");
 
                     b.ToTable("Tickets");
+                });
+
+            modelBuilder.Entity("appdevPUPSCOUT.Models.TicketNote", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AuthorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TicketId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorId");
+
+                    b.HasIndex("TicketId");
+
+                    b.ToTable("TicketNotes");
+                });
+
+            modelBuilder.Entity("appdevPUPSCOUT.Models.TicketPhoto", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FilePath")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TicketId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TicketId");
+
+                    b.ToTable("TicketPhotos");
+                });
+
+            modelBuilder.Entity("appdevPUPSCOUT.Models.TicketStatusHistory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ChangedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TicketId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChangedByUserId");
+
+                    b.HasIndex("TicketId");
+
+                    b.ToTable("TicketStatusHistories");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -490,6 +609,11 @@ namespace appdevPUPSCOUT.Data.Migrations
 
             modelBuilder.Entity("appdevPUPSCOUT.Models.Ticket", b =>
                 {
+                    b.HasOne("appdevPUPSCOUT.Models.ApplicationUser", "Assignee")
+                        .WithMany()
+                        .HasForeignKey("AssigneeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("appdevPUPSCOUT.Models.Equipment", "Equipment")
                         .WithMany()
                         .HasForeignKey("EquipmentId")
@@ -508,11 +632,61 @@ namespace appdevPUPSCOUT.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.Navigation("Assignee");
+
                     b.Navigation("Equipment");
 
                     b.Navigation("Reporter");
 
                     b.Navigation("Room");
+                });
+
+            modelBuilder.Entity("appdevPUPSCOUT.Models.TicketNote", b =>
+                {
+                    b.HasOne("appdevPUPSCOUT.Models.ApplicationUser", "Author")
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("appdevPUPSCOUT.Models.Ticket", "Ticket")
+                        .WithMany("Notes")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Author");
+
+                    b.Navigation("Ticket");
+                });
+
+            modelBuilder.Entity("appdevPUPSCOUT.Models.TicketPhoto", b =>
+                {
+                    b.HasOne("appdevPUPSCOUT.Models.Ticket", "Ticket")
+                        .WithMany("Photos")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Ticket");
+                });
+
+            modelBuilder.Entity("appdevPUPSCOUT.Models.TicketStatusHistory", b =>
+                {
+                    b.HasOne("appdevPUPSCOUT.Models.ApplicationUser", "ChangedBy")
+                        .WithMany()
+                        .HasForeignKey("ChangedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("appdevPUPSCOUT.Models.Ticket", "Ticket")
+                        .WithMany("StatusHistory")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ChangedBy");
+
+                    b.Navigation("Ticket");
                 });
 
             modelBuilder.Entity("appdevPUPSCOUT.Models.Building", b =>
@@ -528,6 +702,15 @@ namespace appdevPUPSCOUT.Data.Migrations
             modelBuilder.Entity("appdevPUPSCOUT.Models.Room", b =>
                 {
                     b.Navigation("Equipment");
+                });
+
+            modelBuilder.Entity("appdevPUPSCOUT.Models.Ticket", b =>
+                {
+                    b.Navigation("Notes");
+
+                    b.Navigation("Photos");
+
+                    b.Navigation("StatusHistory");
                 });
 #pragma warning restore 612, 618
         }

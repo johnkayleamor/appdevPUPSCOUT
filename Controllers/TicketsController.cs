@@ -12,11 +12,13 @@ namespace appdevPUPSCOUT.Controllers;
 public class TicketsController(
     ApplicationDbContext dbContext,
     UserManager<ApplicationUser> userManager,
-    IWebHostEnvironment environment) : Controller
+    IWebHostEnvironment environment,
+    Services.TicketWorkflowService ticketWorkflowService) : Controller
 {
     private readonly ApplicationDbContext _dbContext = dbContext;
     private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly IWebHostEnvironment _environment = environment;
+    private readonly Services.TicketWorkflowService _ticketWorkflowService = ticketWorkflowService;
 
     public IActionResult Create(int? buildingId, int? floorId, int? roomId)
     {
@@ -28,8 +30,8 @@ public class TicketsController(
         };
         ViewBag.Buildings = _dbContext.Buildings.OrderBy(b => b.Name).ToList();
         ViewBag.Floors = _dbContext.Floors.Include(f => f.Building).OrderBy(f => f.Name).ToList();
-        ViewBag.Rooms = _dbContext.Rooms.Include(r => r.Floor).ThenInclude(f => f.Building).Where(r => r.IsActive).OrderBy(r => r.Name).ToList();
-        ViewBag.Equipment = _dbContext.Equipment.Include(e => e.Room).ThenInclude(r => r.Floor).ThenInclude(f => f.Building).Where(e => e.Room != null && e.Room!.IsActive).OrderBy(e => e.Name).ToList();
+        ViewBag.Rooms = _dbContext.Rooms.Include(r => r.Floor).ThenInclude(f => f!.Building).Where(r => r.IsActive).OrderBy(r => r.Name).ToList();
+        ViewBag.Equipment = _dbContext.Equipment.Include(e => e.Room).ThenInclude(r => r!.Floor).ThenInclude(f => f!.Building).Where(e => e.Room != null && e.Room!.IsActive).OrderBy(e => e.Name).ToList();
         return View(model);
     }
 
@@ -68,6 +70,19 @@ public class TicketsController(
     public IActionResult GetRoomsByFloor(int floorId) => GetRooms(floorId);
 
     [HttpGet]
+    public IActionResult GetOpenTickets(int roomId, int equipmentId)
+    {
+        var openStatuses = new[] { TicketStatus.Pending, TicketStatus.Assigned, TicketStatus.InProgress, TicketStatus.PendingVerification };
+        var tickets = _dbContext.Tickets
+            .AsNoTracking()
+            .Where(t => t.RoomId == roomId && t.EquipmentId == equipmentId && openStatuses.Contains(t.Status))
+            .OrderByDescending(t => t.CreatedAt)
+            .Select(t => new { id = t.Id, trackingNumber = t.TrackingNumber, status = t.Status.ToString() })
+            .ToList();
+        return Json(tickets);
+    }
+
+    [HttpGet]
     public IActionResult GetEquipment(int roomId)
     {
         var equipment = _dbContext.Equipment
@@ -86,6 +101,15 @@ public class TicketsController(
         var buildings = _dbContext.Buildings.OrderBy(b => b.Name).ToList();
         if (!buildings.Any())
         {
+            ViewBag.Buildings = buildings;
+            ViewBag.Floors = new List<Floor>();
+            ViewBag.Rooms = new List<Room>();
+            ViewBag.RoomStatuses = new Dictionary<int, string>();
+            ViewBag.EquipmentByRoom = new Dictionary<int, List<Equipment>>();
+            ViewBag.OpenEquipmentIds = new HashSet<int>();
+            ViewBag.SelectedBuildingId = 0;
+            ViewBag.SelectedFloorId = 0;
+            ViewBag.RoomDataJson = "[]";
             return View();
         }
 
@@ -172,19 +196,140 @@ public class TicketsController(
         return View();
     }
 
-    public async Task<IActionResult> MyReports()
+    public async Task<IActionResult> Details(int id)
+    {
+        var ticket = await _dbContext.Tickets
+            .AsNoTracking()
+            .Include(t => t.Room).ThenInclude(r => r!.Floor).ThenInclude(f => f!.Building)
+            .Include(t => t.Equipment)
+            .Include(t => t.Photos)
+            .Include(t => t.Notes).ThenInclude(n => n.Author)
+            .Include(t => t.StatusHistory).ThenInclude(h => h.ChangedBy)
+            .FirstOrDefaultAsync(t => t.Id == id);
+
+        if (ticket is null) return NotFound();
+
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null) return Challenge();
+
+        if (ticket.ReporterId != user.Id && ticket.AssigneeId != user.Id && !User.IsInRole("Admin"))
+        {
+            return Forbid();
+        }
+
+        return View(ticket);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateStatus(int id, TicketStatus newStatus, string? note)
     {
         var user = await _userManager.GetUserAsync(User);
         if (user is null) return Challenge();
 
-        var tickets = await _dbContext.Tickets
+        var ticket = await _dbContext.Tickets.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id);
+        if (ticket is null) return NotFound();
+
+        if (ticket.AssigneeId != user.Id && !User.IsInRole("Admin"))
+        {
+            return Forbid();
+        }
+
+        var result = await _ticketWorkflowService.ChangeStatusAsync(id, newStatus, user.Id, note);
+        if (!result.Success)
+        {
+            TempData["Error"] = result.Error;
+        }
+        else
+        {
+            TempData["Message"] = "Status updated.";
+        }
+
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    public async Task<IActionResult> Assigned(string? status, string? priority)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null) return Challenge();
+
+        var query = _dbContext.Tickets
             .AsNoTracking()
-            .Include(t => t.Room).ThenInclude(r => r.Floor).ThenInclude(f => f.Building)
+            .Include(t => t.Room).ThenInclude(r => r!.Floor).ThenInclude(f => f!.Building)
             .Include(t => t.Equipment)
-            .Where(t => t.ReporterId == user.Id)
-            .OrderByDescending(t => t.CreatedAt)
+            .Include(t => t.Reporter)
+            .Where(t => t.AssigneeId == user.Id)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<TicketStatus>(status, true, out var st))
+        {
+            query = query.Where(t => t.Status == st);
+        }
+        if (!string.IsNullOrWhiteSpace(priority) && Enum.TryParse<TicketPriority>(priority, true, out var pr))
+        {
+            query = query.Where(t => t.Priority == pr);
+        }
+
+        var tickets = await query
+            .OrderByDescending(t => t.Priority)
+            .ThenByDescending(t => t.CreatedAt)
             .ToListAsync();
 
+        ViewBag.Status = status;
+        ViewBag.Priority = priority;
+        return View(tickets);
+    }
+
+    public async Task<IActionResult> Track(string? trackingNumber)
+    {
+        if (string.IsNullOrWhiteSpace(trackingNumber))
+        {
+            return RedirectToAction(nameof(MyReports));
+        }
+
+        var ticket = await _dbContext.Tickets.FirstOrDefaultAsync(t => t.TrackingNumber == trackingNumber.ToUpperInvariant());
+        if (ticket is null)
+        {
+            TempData["Error"] = "Ticket not found.";
+            return RedirectToAction(nameof(MyReports));
+        }
+
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null) return Challenge();
+
+        if (ticket.ReporterId != user.Id && !User.IsInRole("Admin"))
+        {
+            return Forbid();
+        }
+
+        return RedirectToAction(nameof(Details), new { id = ticket.Id });
+    }
+
+    public async Task<IActionResult> MyReports(string? filter)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null) return Challenge();
+
+        var openStatuses = new[] { TicketStatus.Pending, TicketStatus.Assigned, TicketStatus.InProgress, TicketStatus.PendingVerification };
+
+        var query = _dbContext.Tickets
+            .AsNoTracking()
+            .Include(t => t.Room).ThenInclude(r => r!.Floor).ThenInclude(f => f!.Building)
+            .Include(t => t.Equipment)
+            .Where(t => t.ReporterId == user.Id);
+
+        if (string.Equals(filter, "open", StringComparison.OrdinalIgnoreCase))
+        {
+            query = query.Where(t => openStatuses.Contains(t.Status));
+        }
+        else if (string.Equals(filter, "closed", StringComparison.OrdinalIgnoreCase))
+        {
+            query = query.Where(t => t.Status == TicketStatus.Closed || t.Status == TicketStatus.InvalidSpam);
+        }
+
+        var tickets = await query.OrderByDescending(t => t.CreatedAt).ToListAsync();
+
+        ViewBag.Filter = string.IsNullOrWhiteSpace(filter) ? "all" : filter.ToLowerInvariant();
         return View(tickets);
     }
 
@@ -193,16 +338,20 @@ public class TicketsController(
     [EnableRateLimiting("ReportSubmission")]
     public async Task<IActionResult> Create(TicketCreateViewModel model)
     {
-        if (model.Image is not null)
+        var uploadedPhotos = new List<IFormFile>();
+        if (model.Image is not null) uploadedPhotos.Add(model.Image);
+        if (model.Photos is not null) uploadedPhotos.AddRange(model.Photos);
+
+        foreach (var photo in uploadedPhotos)
         {
-            if (!model.Image.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            if (!photo.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
             {
-                ModelState.AddModelError(nameof(model.Image), "Only image files are allowed.");
+                ModelState.AddModelError(nameof(model.Photos), "Only image files are allowed.");
             }
 
-            if (model.Image.Length > 5 * 1024 * 1024)
+            if (photo.Length > 5 * 1024 * 1024)
             {
-                ModelState.AddModelError(nameof(model.Image), "Image must be 5 MB or smaller.");
+                ModelState.AddModelError(nameof(model.Photos), "Each image must be 5 MB or smaller.");
             }
         }
 
@@ -210,8 +359,8 @@ public class TicketsController(
         {
             ViewBag.Buildings = _dbContext.Buildings.OrderBy(b => b.Name).ToList();
             ViewBag.Floors = _dbContext.Floors.Include(f => f.Building).OrderBy(f => f.Name).ToList();
-            ViewBag.Rooms = _dbContext.Rooms.Include(r => r.Floor).ThenInclude(f => f.Building).Where(r => r.IsActive).OrderBy(r => r.Name).ToList();
-            ViewBag.Equipment = _dbContext.Equipment.Include(e => e.Room).ThenInclude(r => r.Floor).ThenInclude(f => f.Building).Where(e => e.Room != null && e.Room!.IsActive).OrderBy(e => e.Name).ToList();
+            ViewBag.Rooms = _dbContext.Rooms.Include(r => r.Floor).ThenInclude(f => f!.Building).Where(r => r.IsActive).OrderBy(r => r.Name).ToList();
+            ViewBag.Equipment = _dbContext.Equipment.Include(e => e.Room).ThenInclude(r => r!.Floor).ThenInclude(f => f!.Building).Where(e => e.Room != null && e.Room!.IsActive).OrderBy(e => e.Name).ToList();
             return View(model);
         }
 
@@ -221,28 +370,29 @@ public class TicketsController(
             return Challenge();
         }
 
-        var ticket = new Ticket
-        {
-            TrackingNumber = Guid.NewGuid().ToString("N")[..12].ToUpperInvariant(),
-            Category = model.Category,
-            RoomId = model.RoomId,
-            EquipmentId = model.EquipmentId,
-            Description = model.Description,
-            ReporterId = user.Id,
-            Status = TicketStatus.Pending
-        };
+        var ticket = await _ticketWorkflowService.CreateAsync(model, user);
 
-        _dbContext.Tickets.Add(ticket);
-        await _dbContext.SaveChangesAsync();
-
-        if (model.Image is not null)
+        if (uploadedPhotos.Count > 0)
         {
-            var uploads = Path.Combine(_environment.WebRootPath, "uploads");
+            var uploads = Path.Combine(_environment.WebRootPath, "uploads", "tickets", ticket.Id.ToString());
             Directory.CreateDirectory(uploads);
-            var fileName = ticket.Id + Path.GetExtension(model.Image.FileName);
-            var filePath = Path.Combine(uploads, fileName);
-            await using var stream = System.IO.File.Create(filePath);
-            await model.Image.CopyToAsync(stream);
+
+            foreach (var photo in uploadedPhotos)
+            {
+                var fileName = Guid.NewGuid().ToString("N") + Path.GetExtension(photo.FileName);
+                var filePath = Path.Combine(uploads, fileName);
+                await using var stream = System.IO.File.Create(filePath);
+                await photo.CopyToAsync(stream);
+
+                var relativePath = Path.Combine("uploads", "tickets", ticket.Id.ToString(), fileName).Replace("\\", "/");
+                _dbContext.TicketPhotos.Add(new TicketPhoto
+                {
+                    TicketId = ticket.Id,
+                    FilePath = relativePath
+                });
+            }
+
+            await _dbContext.SaveChangesAsync();
         }
 
         TempData["Message"] = $"Report submitted. Tracking: {ticket.TrackingNumber}";

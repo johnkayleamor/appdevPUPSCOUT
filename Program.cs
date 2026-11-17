@@ -25,6 +25,10 @@ builder.Services.AddDefaultIdentity<ApplicationUser>(options =>
 
 builder.Services.AddTransient<Microsoft.AspNetCore.Identity.UI.Services.IEmailSender, appdevPUPSCOUT.Services.EmailSender>();
 builder.Services.AddScoped<appdevPUPSCOUT.Services.OtpService>();
+builder.Services.AddScoped<appdevPUPSCOUT.Services.TrackingNumberGenerator>();
+builder.Services.AddScoped<appdevPUPSCOUT.Services.TicketWorkflowService>();
+builder.Services.AddScoped<appdevPUPSCOUT.Services.RoutingService>();
+builder.Services.AddScoped<appdevPUPSCOUT.Services.PriorityService>();
 builder.Services.AddHostedService<appdevPUPSCOUT.Services.SuspensionCleanupService>();
 
 builder.Services.ConfigureApplicationCookie(options =>
@@ -123,6 +127,7 @@ using (var scope = app.Services.CreateScope())
     }
 
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    db.Database.Migrate();
     if (!db.Rooms.Any())
     {
         var building = new Building { Name = "Main Building" };

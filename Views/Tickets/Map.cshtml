@@ -10,12 +10,24 @@
 
 <style>
     button, .btn { min-height: 44px; }
+    #roomPanel { transition: transform .25s ease, opacity .25s ease; }
+    #roomPanel .sheet-handle { width: 40px; height: 4px; background: #ccc; border-radius: 2px; margin: 8px auto; }
     @@media (max-width: 768px) {
-        #roomPanel { position: fixed; left: 0; right: 0; bottom: 0; margin: 0; border-radius: 12px 12px 0 0; z-index: 1050; max-width: 100% !important; }
+        #roomPanel {
+            position: fixed; left: 0; right: 0; bottom: 0; margin: 0;
+            border-radius: 16px 16px 0 0; z-index: 1050;
+            max-width: 100% !important; max-height: 65vh; overflow-y: auto;
+            box-shadow: 0 -4px 16px rgba(0,0,0,.15);
+            transform: translateY(100%);
+        }
+        #roomPanel.open { transform: translateY(0); }
     }
+    .list-view-link { position: sticky; top: 0; z-index: 1040; background: #fff; padding: 8px 0; }
 </style>
-<h1>Floor Map</h1>
-<p><a class="btn btn-outline-secondary" href="/Tickets/Create" style="min-height:44px;">List view</a></p>
+<div class="list-view-link d-flex justify-content-between align-items-center">
+    <h1 class="h3 mb-0">Floor Map</h1>
+    <a class="btn btn-outline-secondary" href="/Tickets/Create" style="min-height:44px;">List view</a>
+</div>
 
 <form method="get" asp-action="Map" class="mb-3 d-flex gap-2 flex-wrap">
     <select name="buildingId" class="form-select" style="max-width:240px;">
@@ -62,11 +74,15 @@
 </div>
 
 <div id="roomPanel" class="card mt-3" style="display:none; max-width:620px;">
+    <div class="sheet-handle d-md-none"></div>
     <div class="card-body">
-        <h5 id="panelTitle"></h5>
+        <div class="d-flex justify-content-between align-items-start">
+            <h5 id="panelTitle" class="mb-1"></h5>
+            <button type="button" id="closePanel" class="btn btn-sm btn-outline-secondary" style="min-height:44px; min-width:44px;" aria-label="Close">&times;</button>
+        </div>
         <p id="panelStatus"></p>
         <ul id="panelEquipment"></ul>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
             <a id="viewTicketBtn" class="btn btn-secondary" href="/Tickets/MyReports" style="min-height:44px;">View ticket</a>
             <a id="reportBtn" class="btn btn-primary" href="/Tickets/Create" style="min-height:44px;">Report a problem</a>
         </div>
@@ -94,7 +110,15 @@
             });
             document.getElementById('viewTicketBtn').href = '/Tickets/MyReports';
             document.getElementById('reportBtn').href = '/Tickets/Create?buildingId=' + selectedBuildingId + '&floorId=' + selectedFloorId + '&roomId=' + roomId;
-            document.getElementById('roomPanel').style.display = 'block';
+            const panel = document.getElementById('roomPanel');
+            panel.style.display = 'block';
+            requestAnimationFrame(() => panel.classList.add('open'));
+        });
+
+        document.getElementById('closePanel').addEventListener('click', function () {
+            const panel = document.getElementById('roomPanel');
+            panel.classList.remove('open');
+            setTimeout(() => { panel.style.display = 'none'; }, 250);
         });
     });
 

@@ -1,0 +1,69 @@
+@model List<appdevPUPSCOUT.Models.Ticket>
+
+@{
+    ViewData["Title"] = "Assigned Tickets";
+    string? status = ViewBag.Status;
+    string? priority = ViewBag.Priority;
+}
+
+<h1>Assigned Tickets</h1>
+
+<form method="get" asp-action="Assigned" class="row g-2 mb-3">
+    <div class="col-md-3">
+        <select name="status" class="form-select">
+            <option value="">All statuses</option>
+            @foreach (var s in Enum.GetValues<appdevPUPSCOUT.Models.TicketStatus>())
+            {
+                <option value="@s" selected="@(status == s.ToString() ? "selected" : null)">@s</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-3">
+        <select name="priority" class="form-select">
+            <option value="">All priorities</option>
+            @foreach (var p in Enum.GetValues<appdevPUPSCOUT.Models.TicketPriority>())
+            {
+                <option value="@p" selected="@(priority == p.ToString() ? "selected" : null)">@p</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-3">
+        <button class="btn btn-primary" type="submit" style="min-height:44px;">Filter</button>
+        <a asp-action="Assigned" class="btn btn-outline-secondary" style="min-height:44px;">Reset</a>
+    </div>
+</form>
+
+@if (!Model.Any())
+{
+    <p>No tickets assigned to you.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Tracking</th>
+                <th>Room / Equipment</th>
+                <th>Category</th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th>Reporter</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var t in Model)
+            {
+                <tr>
+                    <td><a asp-action="Details" asp-route-id="@t.Id">@t.TrackingNumber</a></td>
+                    <td>@t.Room?.Floor?.Building?.Name - @t.Room?.Floor?.Name - @t.Room?.Name<br /><small>@t.Equipment?.Name</small></td>
+                    <td>@t.Category</td>
+                    <td>@t.Priority</td>
+                    <td>@t.Status</td>
+                    <td>@t.Reporter?.Email</td>
+                    <td>@t.CreatedAt.ToString("u")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

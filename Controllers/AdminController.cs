@@ -129,11 +129,165 @@ public class AdminController(
         return RedirectToAction(nameof(Users));
     }
 
+    public async Task<IActionResult> Tickets(string? status, string? priority, string? category, string? assigneeId, DateTime? from, DateTime? to, string? search, int page = 1)
+    {
+        const int pageSize = 20;
+
+        var query = _dbContext.Tickets
+            .AsNoTracking()
+            .Include(t => t.Room).ThenInclude(r => r!.Floor).ThenInclude(f => f!.Building)
+            .Include(t => t.Equipment)
+            .Include(t => t.Reporter)
+            .Include(t => t.Assignee)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<TicketStatus>(status, true, out var st))
+        {
+            query = query.Where(t => t.Status == st);
+        }
+        if (!string.IsNullOrWhiteSpace(priority) && Enum.TryParse<TicketPriority>(priority, true, out var pr))
+        {
+            query = query.Where(t => t.Priority == pr);
+        }
+        if (!string.IsNullOrWhiteSpace(category) && Enum.TryParse<TicketCategory>(category, true, out var cat))
+        {
+            query = query.Where(t => t.Category == cat);
+        }
+        if (!string.IsNullOrWhiteSpace(assigneeId))
+        {
+            if (assigneeId == "unassigned")
+            {
+                query = query.Where(t => t.AssigneeId == null);
+            }
+            else
+            {
+                query = query.Where(t => t.AssigneeId == assigneeId);
+            }
+        }
+        if (from.HasValue)
+        {
+            query = query.Where(t => t.CreatedAt >= from.Value);
+        }
+        if (to.HasValue)
+        {
+            query = query.Where(t => t.CreatedAt <= to.Value.AddDays(1));
+        }
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query = query.Where(t => t.TrackingNumber.Contains(search) ||
+                (t.Room != null && t.Room.Name.Contains(search)));
+        }
+
+        query = query
+            .OrderBy(t => t.AssigneeId != null)
+            .ThenByDescending(t => t.Priority)
+            .ThenByDescending(t => t.CreatedAt);
+
+        var total = await query.CountAsync();
+        var tickets = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+
+        var staff = new List<ApplicationUser>();
+        foreach (var role in new[] { "ITPersonnel", "MaintenancePersonnel" })
+        {
+            staff.AddRange(await _userManager.GetUsersInRoleAsync(role));
+        }
+        staff = staff.DistinctBy(u => u.Id).OrderBy(u => u.Email).ToList();
+
+        ViewBag.Total = total;
+        ViewBag.Page = page;
+        ViewBag.PageSize = pageSize;
+        ViewBag.TotalPages = (int)Math.Ceiling(total / (double)pageSize);
+        ViewBag.Staff = staff;
+        ViewBag.Status = status;
+        ViewBag.Priority = priority;
+        ViewBag.Category = category;
+        ViewBag.AssigneeId = assigneeId;
+        ViewBag.From = from;
+        ViewBag.To = to;
+        ViewBag.Search = search;
+
+        return View(tickets);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AssignTicket(int id, string? assigneeId)
+    {
+        var admin = await _userManager.GetUserAsync(User);
+        var ticket = await _dbContext.Tickets.FindAsync(id);
+        if (ticket is null) return NotFound();
+
+        var previousAssigneeId = ticket.AssigneeId;
+        ticket.AssigneeId = string.IsNullOrWhiteSpace(assigneeId) ? null : assigneeId;
+        if (!string.IsNullOrWhiteSpace(assigneeId) && ticket.Status == TicketStatus.Pending)
+        {
+            var oldStatus = ticket.Status;
+            ticket.Status = TicketStatus.Assigned;
+            _dbContext.TicketStatusHistories.Add(new TicketStatusHistory
+            {
+                TicketId = ticket.Id,
+                Status = TicketStatus.Assigned,
+                ChangedByUserId = admin?.Id,
+                ChangedAt = DateTime.UtcNow
+            });
+        }
+        await _dbContext.SaveChangesAsync();
+
+        var assignee = string.IsNullOrWhiteSpace(assigneeId) ? null : await _userManager.FindByIdAsync(assigneeId);
+        _dbContext.AuditLogs.Add(new AuditLog
+        {
+            TargetUserId = ticket.ReporterId,
+            AdminId = admin?.Id,
+            AdminName = User.Identity?.Name,
+            Action = "Assign",
+            Reason = $"Ticket {ticket.TrackingNumber} reassigned from {previousAssigneeId ?? "unassigned"} to {assignee?.Email ?? "unassigned"}.",
+            CreatedAt = DateTime.UtcNow
+        });
+        await _dbContext.SaveChangesAsync();
+
+        TempData["Message"] = "Ticket assignment updated.";
+        return RedirectToAction(nameof(Tickets));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ChangePriority(int id, TicketPriority priority)
+    {
+        var ticket = await _dbContext.Tickets.FindAsync(id);
+        if (ticket is null) return NotFound();
+
+        ticket.Priority = priority;
+        await _dbContext.SaveChangesAsync();
+        TempData["Message"] = "Priority updated.";
+        return RedirectToAction(nameof(Tickets));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> MarkInvalid(int id)
+    {
+        var admin = await _userManager.GetUserAsync(User);
+        var ticket = await _dbContext.Tickets.FindAsync(id);
+        if (ticket is null) return NotFound();
+
+        ticket.Status = TicketStatus.InvalidSpam;
+        _dbContext.TicketStatusHistories.Add(new TicketStatusHistory
+        {
+            TicketId = ticket.Id,
+            Status = TicketStatus.InvalidSpam,
+            ChangedByUserId = admin?.Id,
+            ChangedAt = DateTime.UtcNow
+        });
+        await _dbContext.SaveChangesAsync();
+        TempData["Message"] = "Ticket marked invalid/spam.";
+        return RedirectToAction(nameof(Tickets));
+    }
+
     public IActionResult Locations()
     {
         ViewBag.Buildings = _dbContext.Buildings.OrderBy(b => b.Name).ToList();
         ViewBag.Floors = _dbContext.Floors.Include(f => f.Building).OrderBy(f => f.Name).ToList();
-        ViewBag.Rooms = _dbContext.Rooms.Include(r => r.Floor).ThenInclude(f => f.Building).OrderBy(r => r.Name).ToList();
+        ViewBag.Rooms = _dbContext.Rooms.Include(r => r.Floor).ThenInclude(f => f!.Building).OrderBy(r => r.Name).ToList();
         ViewBag.Equipment = _dbContext.Equipment.Include(e => e.Room).OrderBy(e => e.Name).ToList();
         return View();
     }

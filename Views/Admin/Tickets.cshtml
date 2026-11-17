@@ -1,0 +1,159 @@
+@model List<appdevPUPSCOUT.Models.Ticket>
+
+@{
+    ViewData["Title"] = "All Tickets";
+    var staff = (List<appdevPUPSCOUT.Models.ApplicationUser>)ViewBag.Staff;
+    int page = ViewBag.Page;
+    int totalPages = ViewBag.TotalPages;
+    string? status = ViewBag.Status;
+    string? priority = ViewBag.Priority;
+    string? category = ViewBag.Category;
+    string? assigneeId = ViewBag.AssigneeId;
+    DateTime? from = ViewBag.From;
+    DateTime? to = ViewBag.To;
+    string? search = ViewBag.Search;
+}
+
+<h1>All Tickets</h1>
+
+@if (TempData["Message"] is string msg)
+{
+    <div class="alert alert-success">@msg</div>
+}
+@if (TempData["Error"] is string err)
+{
+    <div class="alert alert-danger">@err</div>
+}
+
+<form method="get" asp-action="Tickets" class="row g-2 mb-3">
+    <div class="col-md-2">
+        <select name="status" class="form-select">
+            <option value="">All statuses</option>
+            @foreach (var s in Enum.GetValues<appdevPUPSCOUT.Models.TicketStatus>())
+            {
+                <option value="@s" selected="@(status == s.ToString() ? "selected" : null)">@s</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select name="priority" class="form-select">
+            <option value="">All priorities</option>
+            @foreach (var p in Enum.GetValues<appdevPUPSCOUT.Models.TicketPriority>())
+            {
+                <option value="@p" selected="@(priority == p.ToString() ? "selected" : null)">@p</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select name="category" class="form-select">
+            <option value="">All categories</option>
+            @foreach (var c in Enum.GetValues<appdevPUPSCOUT.Models.TicketCategory>())
+            {
+                <option value="@c" selected="@(category == c.ToString() ? "selected" : null)">@c</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select name="assigneeId" class="form-select">
+            <option value="">All assignees</option>
+            <option value="unassigned" selected="@(assigneeId == "unassigned" ? "selected" : null)">Unassigned</option>
+            @foreach (var u in staff)
+            {
+                <option value="@u.Id" selected="@(assigneeId == u.Id ? "selected" : null)">@u.Email</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-1">
+        <input type="date" name="from" value="@(from?.ToString("yyyy-MM-dd"))" class="form-control" />
+    </div>
+    <div class="col-md-1">
+        <input type="date" name="to" value="@(to?.ToString("yyyy-MM-dd"))" class="form-control" />
+    </div>
+    <div class="col-md-2">
+        <input type="text" name="search" value="@search" class="form-control" placeholder="Tracking or room" />
+    </div>
+    <div class="col-md-12">
+        <button class="btn btn-primary" type="submit" style="min-height:44px;">Filter</button>
+        <a asp-action="Tickets" class="btn btn-outline-secondary" style="min-height:44px;">Reset</a>
+    </div>
+</form>
+
+<table class="table table-sm">
+    <thead>
+        <tr>
+            <th>Tracking</th>
+            <th>Room / Equipment</th>
+            <th>Category</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th>Reporter</th>
+            <th>Assignee</th>
+            <th>Date</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var t in Model)
+        {
+            <tr>
+                <td><a asp-controller="Tickets" asp-action="Details" asp-route-id="@t.Id">@t.TrackingNumber</a></td>
+                <td>@t.Room?.Floor?.Building?.Name - @t.Room?.Floor?.Name - @t.Room?.Name<br /><small>@t.Equipment?.Name</small></td>
+                <td>@t.Category</td>
+                <td>@t.Priority</td>
+                <td>@t.Status</td>
+                <td>@t.Reporter?.Email</td>
+                <td>@(t.Assignee?.Email ?? "Unassigned")</td>
+                <td>@t.CreatedAt.ToString("u")</td>
+                <td>
+                    <form asp-action="AssignTicket" method="post" class="mb-1">
+                        <input type="hidden" name="id" value="@t.Id" />
+                        <select name="assigneeId" class="form-select form-select-sm">
+                            <option value="">Unassigned</option>
+                            @foreach (var u in staff)
+                            {
+                                <option value="@u.Id" selected="@(u.Id == t.AssigneeId ? "selected" : null)">@u.Email</option>
+                            }
+                        </select>
+                        <button class="btn btn-sm btn-primary mt-1" type="submit">Assign</button>
+                    </form>
+                    <form asp-action="ChangePriority" method="post" class="mb-1">
+                        <input type="hidden" name="id" value="@t.Id" />
+                        <select name="priority" class="form-select form-select-sm">
+                            @foreach (var p in Enum.GetValues<appdevPUPSCOUT.Models.TicketPriority>())
+                            {
+                                <option value="@p" selected="@(p == t.Priority ? "selected" : null)">@p</option>
+                            }
+                        </select>
+                        <button class="btn btn-sm btn-secondary mt-1" type="submit">Priority</button>
+                    </form>
+                    <form asp-action="MarkInvalid" method="post">
+                        <input type="hidden" name="id" value="@t.Id" />
+                        <button class="btn btn-sm btn-danger" type="submit">Invalid/Spam</button>
+                    </form>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@if (totalPages > 1)
+{
+    <nav>
+        <ul class="pagination">
+            @for (int i = 1; i <= totalPages; i++)
+            {
+                <li class="page-item @(i == page ? "active" : "")">
+                    <a class="page-link" asp-action="Tickets"
+                       asp-route-page="@i"
+                       asp-route-status="@status"
+                       asp-route-priority="@priority"
+                       asp-route-category="@category"
+                       asp-route-assigneeId="@assigneeId"
+                       asp-route-from="@(from?.ToString("yyyy-MM-dd"))"
+                       asp-route-to="@(to?.ToString("yyyy-MM-dd"))"
+                       asp-route-search="@search">@i</a>
+                </li>
+            }
+        </ul>
+    </nav>
+}

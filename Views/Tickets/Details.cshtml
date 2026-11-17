@@ -1,0 +1,97 @@
+@model appdevPUPSCOUT.Models.Ticket
+
+@{
+    ViewData["Title"] = "Ticket Details";
+}
+
+<h1>Ticket Details</h1>
+
+<dl class="row">
+    <dt class="col-sm-3">Tracking</dt>
+    <dd class="col-sm-9">@Model.TrackingNumber</dd>
+    <dt class="col-sm-3">Category</dt>
+    <dd class="col-sm-9">@Model.Category</dd>
+    <dt class="col-sm-3">Location</dt>
+    <dd class="col-sm-9">@Model.Room?.Floor?.Building?.Name - @Model.Room?.Floor?.Name - @Model.Room?.Name</dd>
+    <dt class="col-sm-3">Equipment</dt>
+    <dd class="col-sm-9">@Model.Equipment?.Name</dd>
+    <dt class="col-sm-3">Status</dt>
+    <dd class="col-sm-9">@Model.Status</dd>
+    <dt class="col-sm-3">Description</dt>
+    <dd class="col-sm-9">@Model.Description</dd>
+    <dt class="col-sm-3">Created</dt>
+    <dd class="col-sm-9">@Model.CreatedAt.ToString("u")</dd>
+</dl>
+
+<h2>Photos</h2>
+@if (Model.Photos is null || !Model.Photos.Any())
+{
+    <p>No photos attached.</p>
+}
+else
+{
+    <div class="d-flex flex-wrap gap-2">
+        @foreach (var photo in Model.Photos)
+        {
+            <img src="~/@photo.FilePath" alt="Ticket photo" style="max-width:240px; max-height:240px;" class="img-thumbnail" />
+        }
+    </div>
+}
+
+<h2>Status Timeline</h2>
+@if (Model.StatusHistory is null || !Model.StatusHistory.Any())
+{
+    <p>No status history.</p>
+}
+else
+{
+    <ul class="list-group mb-3">
+        @foreach (var h in Model.StatusHistory.OrderBy(x => x.ChangedAt))
+        {
+            <li class="list-group-item">
+                <strong>@h.Status</strong>
+                <small class="text-muted"> - @h.ChangedAt.ToString("u") @(h.ChangedBy?.Email is null ? "" : $"by {h.ChangedBy.Email}")</small>
+            </li>
+        }
+    </ul>
+}
+
+<h2>Notes</h2>
+@if (Model.Notes is null || !Model.Notes.Any())
+{
+    <p>No notes yet.</p>
+}
+else
+{
+    <ul class="list-group mb-3">
+        @foreach (var n in Model.Notes.OrderBy(x => x.CreatedAt))
+        {
+            <li class="list-group-item">
+                <small class="text-muted">@n.CreatedAt.ToString("u") - @(n.Author?.Email ?? n.AuthorId)</small>
+                <div>@n.Note</div>
+            </li>
+        }
+    </ul>
+}
+
+@{
+    var canUpdate = User.IsInRole("Admin") || Model.AssigneeId == User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    appdevPUPSCOUT.Models.TicketStatus? nextStatus = null;
+    if (Model.Status == appdevPUPSCOUT.Models.TicketStatus.Assigned) nextStatus = appdevPUPSCOUT.Models.TicketStatus.InProgress;
+    else if (Model.Status == appdevPUPSCOUT.Models.TicketStatus.InProgress) nextStatus = appdevPUPSCOUT.Models.TicketStatus.PendingVerification;
+}
+@if (canUpdate && nextStatus.HasValue)
+{
+    <h3>Update Status</h3>
+    <form asp-action="UpdateStatus" method="post" class="mb-3">
+        <input type="hidden" name="id" value="@Model.Id" />
+        <input type="hidden" name="newStatus" value="@nextStatus" />
+        <div class="mb-2">
+            <label class="form-label">Move to @nextStatus</label>
+            <textarea name="note" class="form-control" rows="2" placeholder="Add a note (optional)"></textarea>
+        </div>
+        <button class="btn btn-primary" type="submit" style="min-height:44px;">Update</button>
+    </form>
+}
+
+<p class="mt-3"><a class="btn btn-secondary" asp-action="MyReports">Back to My Reports</a></p>

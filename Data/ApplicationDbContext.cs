@@ -11,6 +11,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Room> Rooms => Set<Room>();
     public DbSet<Equipment> Equipment => Set<Equipment>();
     public DbSet<Ticket> Tickets => Set<Ticket>();
+    public DbSet<TicketPhoto> TicketPhotos => Set<TicketPhoto>();
+    public DbSet<TicketNote> TicketNotes => Set<TicketNote>();
+    public DbSet<TicketStatusHistory> TicketStatusHistories => Set<TicketStatusHistory>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<OtpCode> OtpCodes => Set<OtpCode>();
 
@@ -24,6 +27,19 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(t => t.EquipmentId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<Ticket>().HasOne(t => t.Reporter).WithMany()
             .HasForeignKey(t => t.ReporterId).OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<Ticket>().HasOne(t => t.Assignee).WithMany()
+            .HasForeignKey(t => t.AssigneeId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<TicketPhoto>().HasOne(p => p.Ticket).WithMany(t => t.Photos)
+            .HasForeignKey(p => p.TicketId).OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<TicketNote>().HasOne(n => n.Ticket).WithMany(t => t.Notes)
+            .HasForeignKey(n => n.TicketId).OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<TicketNote>().HasOne(n => n.Author).WithMany()
+            .HasForeignKey(n => n.AuthorId).OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<TicketStatusHistory>().HasOne(h => h.Ticket).WithMany(t => t.StatusHistory)
+            .HasForeignKey(h => h.TicketId).OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<TicketStatusHistory>().HasOne(h => h.ChangedBy).WithMany()
+            .HasForeignKey(h => h.ChangedByUserId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Entity<Building>().HasData(new Building { Id = 1, Name = "Main Building" });
         builder.Entity<Floor>().HasData(new Floor { Id = 1, Name = "1st Floor", BuildingId = 1 });

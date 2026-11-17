@@ -3,7 +3,21 @@
     ViewData["Title"] = "My Reports";
 }
 
+@{
+    var filter = (string?)ViewBag.Filter ?? "all";
+}
 <h1>My Reports</h1>
+
+<form asp-action="Track" method="get" class="mb-3 d-flex gap-2">
+    <input type="text" name="trackingNumber" class="form-control" placeholder="Tracking number" />
+    <button class="btn btn-primary" type="submit" style="min-height:44px;">Lookup</button>
+</form>
+
+<div class="mb-3">
+    <a asp-action="MyReports" asp-route-filter="all" class="btn btn-sm @(filter == "all" ? "btn-primary" : "btn-outline-primary")" style="min-height:44px;">All</a>
+    <a asp-action="MyReports" asp-route-filter="open" class="btn btn-sm @(filter == "open" ? "btn-primary" : "btn-outline-primary")" style="min-height:44px;">Open</a>
+    <a asp-action="MyReports" asp-route-filter="closed" class="btn btn-sm @(filter == "closed" ? "btn-primary" : "btn-outline-primary")" style="min-height:44px;">Closed</a>
+</div>
 
 @if (!Model.Any())
 {
@@ -26,11 +40,17 @@ else
         @foreach (var t in Model)
         {
             <tr>
-                <td>@t.TrackingNumber</td>
+                <td><a asp-action="Details" asp-route-id="@t.Id">@t.TrackingNumber</a></td>
                 <td>@t.Category</td>
                 <td>@t.Room?.Floor?.Building?.Name - @t.Room?.Floor?.Name - @t.Room?.Name</td>
                 <td>@t.Equipment?.Name</td>
-                <td>@t.Status</td>
+                <td>
+                    @{
+                        var badgeClass = t.Status == TicketStatus.Closed ? "bg-secondary" :
+                                         t.Status == TicketStatus.InvalidSpam ? "bg-danger" : "bg-warning text-dark";
+                    }
+                    <span class="badge @badgeClass">@t.Status</span>
+                </td>
                 <td>@t.CreatedAt.ToString("u")</td>
             </tr>
         }
