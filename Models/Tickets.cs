@@ -19,6 +19,13 @@ public class Ticket
     public string? AssigneeId { get; set; }
     public ApplicationUser? Assignee { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? VerificationStartedAt { get; set; }
+    public string? RejectReason { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string? RejectionReason { get => RejectReason; set => RejectReason = value; }
+    public TicketClosureType ClosureType { get; set; } = TicketClosureType.None;
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public TicketClosureType ClosedBy { get => ClosureType; set => ClosureType = value; }
     public List<TicketPhoto> Photos { get; set; } = new();
     public List<TicketNote> Notes { get; set; } = new();
     public List<TicketComment> Comments { get; set; } = new();

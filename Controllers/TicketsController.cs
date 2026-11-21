@@ -248,17 +248,6 @@ public class TicketsController(
         else
         {
             TempData["Message"] = "Status updated.";
-
-            if (newStatus == TicketStatus.PendingVerification)
-            {
-                var reporter = await _userManager.FindByIdAsync(ticket.ReporterId);
-                if (reporter?.Email is not null)
-                {
-                    await _emailSender.SendEmailAsync(reporter.Email,
-                        $"Ticket {ticket.TrackingNumber} pending verification",
-                        $"Work on ticket {ticket.TrackingNumber} has been marked complete. Please confirm or reject the fix.");
-                }
-            }
         }
 
         return RedirectToAction(nameof(Details), new { id });
@@ -276,7 +265,8 @@ public class TicketsController(
             .FirstOrDefaultAsync(t => t.Id == id);
         if (ticket is null) return NotFound();
 
-        if (!CanConfirmOrReject(ticket, user))
+        var isAdmin = User.IsInRole("Admin");
+        if (!CanConfirmOrReject(ticket, user, isAdmin))
         {
             return Forbid();
         }
@@ -287,22 +277,26 @@ public class TicketsController(
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        var oldStatus = ticket.Status;
-        ticket.Status = TicketStatus.Closed;
-
-        _dbContext.TicketStatusHistories.Add(new TicketStatusHistory
+        string? reason = null;
+        if (isAdmin)
         {
-            TicketId = ticket.Id,
-            Status = TicketStatus.Closed,
-            ChangedByUserId = user.Id,
-            ChangedAt = DateTime.UtcNow
-        });
+            reason = Request.Form["reason"].ToString();
+            if (string.IsNullOrWhiteSpace(reason))
+            {
+                TempData["Error"] = "A reason is required.";
+                return RedirectToAction(nameof(Details), new { id });
+            }
+        }
 
-        await _dbContext.SaveChangesAsync();
-        await _auditService.Log(user.Id, "ConfirmFix", ticket.Id,
-            $"Ticket {ticket.TrackingNumber}: {oldStatus} -> Closed.",
-            ticket.ReporterId, ticket.Reporter?.Email, user.Email);
-        TempData["Message"] = "Ticket confirmed and closed.";
+        var result = await _ticketWorkflowService.ConfirmAsync(id, user.Id, isAdmin, reason);
+        if (!result.Success)
+        {
+            TempData["Error"] = result.Error;
+        }
+        else
+        {
+            TempData["Message"] = isAdmin ? "Ticket closed by admin." : "Ticket confirmed and closed.";
+        }
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -324,7 +318,8 @@ public class TicketsController(
             .FirstOrDefaultAsync(t => t.Id == id);
         if (ticket is null) return NotFound();
 
-        if (!CanConfirmOrReject(ticket, user))
+        var isAdmin = User.IsInRole("Admin");
+        if (!CanConfirmOrReject(ticket, user, isAdmin))
         {
             return Forbid();
         }
@@ -335,45 +330,21 @@ public class TicketsController(
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        var oldStatus = ticket.Status;
-        ticket.Status = TicketStatus.InProgress;
-
-        _dbContext.TicketStatusHistories.Add(new TicketStatusHistory
+        var result = await _ticketWorkflowService.RejectAsync(id, user.Id, reason!, isAdmin);
+        if (!result.Success)
         {
-            TicketId = ticket.Id,
-            Status = TicketStatus.InProgress,
-            ChangedByUserId = user.Id,
-            ChangedAt = DateTime.UtcNow
-        });
-
-        _dbContext.TicketNotes.Add(new TicketNote
+            TempData["Error"] = result.Error;
+        }
+        else
         {
-            TicketId = ticket.Id,
-            AuthorId = user.Id,
-            Note = $"Rejected fix: {reason.Trim()}"
-        });
-
-        var rejectRoles = await _userManager.GetRolesAsync(user);
-        _dbContext.TicketComments.Add(new TicketComment
-        {
-            TicketId = ticket.Id,
-            AuthorId = user.Id,
-            AuthorRole = rejectRoles.FirstOrDefault() ?? "User",
-            Content = $"Rejected fix: {reason.Trim()}",
-            CreatedAt = DateTime.UtcNow
-        });
-
-        await _dbContext.SaveChangesAsync();
-        await _auditService.Log(user.Id, "RejectFix", ticket.Id,
-            $"Ticket {ticket.TrackingNumber}: {oldStatus} -> InProgress. Reason: {reason.Trim()}",
-            ticket.ReporterId, ticket.Reporter?.Email, user.Email);
-        TempData["Message"] = "Fix rejected; ticket returned to In Progress.";
+            TempData["Message"] = "Fix rejected; ticket returned to In Progress.";
+        }
         return RedirectToAction(nameof(Details), new { id });
     }
 
-    private bool CanConfirmOrReject(Ticket ticket, ApplicationUser user)
+    private bool CanConfirmOrReject(Ticket ticket, ApplicationUser user, bool isAdmin)
     {
-        if (User.IsInRole("Admin")) return true;
+        if (isAdmin) return true;
         if (ticket.ReporterId == user.Id && ticket.ReporterId != ticket.AssigneeId) return true;
         return false;
     }

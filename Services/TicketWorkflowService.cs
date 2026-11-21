@@ -69,6 +69,15 @@ public class TicketWorkflowService(ApplicationDbContext dbContext, TrackingNumbe
 
         ticket.Status = newStatus;
 
+        if (newStatus == TicketStatus.PendingVerification)
+        {
+            ticket.VerificationStartedAt = DateTime.UtcNow;
+        }
+        else if (newStatus == TicketStatus.InProgress)
+        {
+            ticket.VerificationStartedAt = null;
+        }
+
         _dbContext.TicketStatusHistories.Add(new TicketStatusHistory
         {
             TicketId = ticket.Id,
@@ -91,5 +100,117 @@ public class TicketWorkflowService(ApplicationDbContext dbContext, TrackingNumbe
             $"Ticket {ticket.TrackingNumber}: {oldStatus} -> {newStatus}. {note}".Trim(),
             ticket.ReporterId, null, null);
         return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> ConfirmAsync(int ticketId, string userId, bool isAdmin, string? reason)
+    {
+        var ticket = await _dbContext.Tickets.FindAsync(ticketId);
+        if (ticket is null) return (false, "Ticket not found.");
+
+        if (ticket.Status != TicketStatus.PendingVerification)
+        {
+            return (false, "Ticket is not pending verification.");
+        }
+
+        if (isAdmin && string.IsNullOrWhiteSpace(reason))
+        {
+            return (false, "A reason is required.");
+        }
+
+        ticket.Status = TicketStatus.Closed;
+        ticket.ClosureType = isAdmin ? TicketClosureType.ClosedByAdmin : TicketClosureType.Confirmed;
+
+        _dbContext.TicketStatusHistories.Add(new TicketStatusHistory
+        {
+            TicketId = ticket.Id,
+            Status = TicketStatus.Closed,
+            ChangedByUserId = userId,
+            ChangedAt = DateTime.UtcNow
+        });
+
+        if (!string.IsNullOrWhiteSpace(reason))
+        {
+            _dbContext.TicketNotes.Add(new TicketNote
+            {
+                TicketId = ticket.Id,
+                AuthorId = userId,
+                Note = reason!.Trim()
+            });
+        }
+
+        await _auditService.Log(userId, isAdmin ? "ConfirmByAdmin" : "ConfirmFix", ticket.Id,
+            $"Ticket {ticket.TrackingNumber} confirmed and closed.",
+            ticket.ReporterId, null, null);
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> RejectAsync(int ticketId, string userId, string reason, bool isAdmin)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            return (false, "A reason is required to reject the fix.");
+        }
+
+        var ticket = await _dbContext.Tickets.FindAsync(ticketId);
+        if (ticket is null) return (false, "Ticket not found.");
+
+        if (ticket.Status != TicketStatus.PendingVerification)
+        {
+            return (false, "Ticket is not pending verification.");
+        }
+
+        ticket.Status = TicketStatus.InProgress;
+        ticket.VerificationStartedAt = null;
+        ticket.RejectReason = reason.Trim();
+
+        _dbContext.TicketStatusHistories.Add(new TicketStatusHistory
+        {
+            TicketId = ticket.Id,
+            Status = TicketStatus.InProgress,
+            ChangedByUserId = userId,
+            ChangedAt = DateTime.UtcNow
+        });
+
+        _dbContext.TicketNotes.Add(new TicketNote
+        {
+            TicketId = ticket.Id,
+            AuthorId = userId,
+            Note = $"Rejected fix: {reason.Trim()}"
+        });
+
+        _dbContext.TicketComments.Add(new TicketComment
+        {
+            TicketId = ticket.Id,
+            AuthorId = userId,
+            AuthorRole = isAdmin ? "Admin" : "Reporter",
+            Content = $"Rejected fix: {reason.Trim()}",
+            CreatedAt = DateTime.UtcNow
+        });
+
+        await _auditService.Log(userId, isAdmin ? "RejectByAdmin" : "RejectFix", ticket.Id,
+            $"Ticket {ticket.TrackingNumber} rejected. Reason: {reason.Trim()}",
+            ticket.ReporterId, null, null);
+        return (true, null);
+    }
+
+    public async Task AutoCloseAsync(int ticketId)
+    {
+        var ticket = await _dbContext.Tickets.FindAsync(ticketId);
+        if (ticket is null || ticket.Status != TicketStatus.PendingVerification) return;
+
+        ticket.Status = TicketStatus.Closed;
+        ticket.ClosureType = TicketClosureType.AutoClosed;
+
+        _dbContext.TicketStatusHistories.Add(new TicketStatusHistory
+        {
+            TicketId = ticket.Id,
+            Status = TicketStatus.Closed,
+            ChangedByUserId = null,
+            ChangedAt = DateTime.UtcNow
+        });
+
+        await _auditService.Log(null, "AutoClose", ticket.Id,
+            $"Ticket {ticket.TrackingNumber} auto-closed after time limit.",
+            ticket.ReporterId, null, "System");
     }
 }

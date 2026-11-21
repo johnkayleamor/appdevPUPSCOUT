@@ -156,6 +156,13 @@ else
     <h3>Verify Fix</h3>
     <form asp-action="ConfirmFix" method="post" class="mb-2">
         <input type="hidden" name="id" value="@Model.Id" />
+        @if (User.IsInRole("Admin"))
+        {
+            <div class="mb-2">
+                <label class="form-label">Reason (required for admin)</label>
+                <textarea name="reason" class="form-control" rows="2" required></textarea>
+            </div>
+        }
         <button class="btn btn-success" type="submit" style="min-height:44px;">Confirm Fixed</button>
     </form>
     <form asp-action="RejectFix" method="post" class="mb-3">

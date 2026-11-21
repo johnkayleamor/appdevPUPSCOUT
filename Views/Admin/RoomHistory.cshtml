@@ -2,7 +2,7 @@
 
 @{
     ViewData["Title"] = "Room History";
-    var tickets = (List<appdevPUPSCOUT.Models.Ticket>)ViewBag.Tickets;
+    var tickets = ViewBag.Tickets as List<appdevPUPSCOUT.Models.Ticket> ?? new List<appdevPUPSCOUT.Models.Ticket>();
     var canSeeNames = User.IsInRole("Admin") || tickets.Any(t => t.AssigneeId == User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value);
 }
 

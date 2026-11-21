@@ -58,3 +58,19 @@ To: itpersonnel@pup.edu.ph
 Subject: New comment on ticket 51F4F86022F3
 A new comment was added to ticket 51F4F86022F3.
 ---
+To: student@pup.edu.ph
+Subject: New comment on ticket B72B4EEB3CA4
+A new comment was added to ticket B72B4EEB3CA4.
+---
+To: maintenancepersonnel@pup.edu.ph
+Subject: New comment on ticket B72B4EEB3CA4
+A new comment was added to ticket B72B4EEB3CA4.
+---
+To: student@pup.edu.ph
+Subject: Ticket B72B4EEB3CA4 pending verification
+Work on ticket B72B4EEB3CA4 has been marked complete. Please confirm or reject the fix.
+---
+To: itpersonnel@pup.edu.ph
+Subject: New comment on ticket 134B0E5FE7AA
+A new comment was added to ticket 134B0E5FE7AA.
+---
