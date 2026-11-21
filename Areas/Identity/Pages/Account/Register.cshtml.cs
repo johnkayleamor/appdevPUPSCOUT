@@ -96,7 +96,7 @@ public class RegisterModel(
                     $"Your verification code is: <b>{otp}</b>. It expires in 10 minutes.");
 
                 CodeSent = true;
-                ModelState.AddModelError(string.Empty, "A verification code has been sent to your email.");
+                ModelState.AddModelError(string.Empty, "A verification code has been sent to your PUP webmail.");
                 return Page();
             }
 
