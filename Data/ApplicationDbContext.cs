@@ -30,6 +30,11 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         builder.Entity<Ticket>().HasOne(t => t.Assignee).WithMany()
             .HasForeignKey(t => t.AssigneeId).OnDelete(DeleteBehavior.Restrict);
 
+        builder.Entity<Ticket>().HasIndex(t => t.Status);
+        builder.Entity<Ticket>().HasIndex(t => t.CreatedAt);
+        builder.Entity<Ticket>().HasIndex(t => t.RoomId);
+        builder.Entity<Ticket>().HasIndex(t => t.EquipmentId);
+
         builder.Entity<TicketPhoto>().HasOne(p => p.Ticket).WithMany(t => t.Photos)
             .HasForeignKey(p => p.TicketId).OnDelete(DeleteBehavior.Cascade);
         builder.Entity<TicketNote>().HasOne(n => n.Ticket).WithMany(t => t.Notes)

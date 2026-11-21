@@ -435,11 +435,15 @@ namespace appdevPUPSCOUT.Data.Migrations
 
                     b.HasIndex("AssigneeId");
 
+                    b.HasIndex("CreatedAt");
+
                     b.HasIndex("EquipmentId");
 
                     b.HasIndex("ReporterId");
 
                     b.HasIndex("RoomId");
+
+                    b.HasIndex("Status");
 
                     b.ToTable("Tickets");
                 });

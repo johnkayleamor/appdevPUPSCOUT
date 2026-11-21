@@ -1,0 +1,81 @@
+@model appdevPUPSCOUT.Models.MostReportedViewModel
+
+@{
+    ViewData["Title"] = "Most Reported Rooms and Equipment";
+}
+
+<h1>Most Reported Rooms and Equipment</h1>
+
+<form method="get" asp-action="MostReported" class="row g-2 mb-3">
+    <div class="col-md-3">
+        <label class="form-label">Start date</label>
+        <input type="date" name="startDate" value="@Model.StartDate.ToString("yyyy-MM-dd")" class="form-control" />
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">End date</label>
+        <input type="date" name="endDate" value="@Model.EndDate.ToString("yyyy-MM-dd")" class="form-control" />
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+        <button class="btn btn-primary" type="submit">Apply</button>
+    </div>
+</form>
+
+<h2>Rooms</h2>
+<table class="table table-sm">
+    <thead>
+        <tr><th>Room</th><th>Reports</th></tr>
+    </thead>
+    <tbody>
+        @foreach (var r in Model.RoomCounts)
+        {
+            <tr><td>@r.RoomName</td><td>@r.Count</td></tr>
+        }
+    </tbody>
+</table>
+<canvas id="roomsChart" height="120"></canvas>
+
+<h2 class="mt-4">Equipment</h2>
+<table class="table table-sm">
+    <thead>
+        <tr><th>Equipment</th><th>Reports</th></tr>
+    </thead>
+    <tbody>
+        @foreach (var e in Model.EquipmentCounts)
+        {
+            <tr><td>@e.EquipmentName</td><td>@e.Count</td></tr>
+        }
+    </tbody>
+</table>
+<canvas id="equipmentChart" height="120"></canvas>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        (function () {
+            const roomData = @Html.Raw(Model.RoomCountsJson);
+            const equipmentData = @Html.Raw(Model.EquipmentCountsJson);
+
+            const roomCtx = document.getElementById('roomsChart');
+            if (roomCtx) {
+                new Chart(roomCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: roomData.map(x => x.label),
+                        datasets: [{ label: 'Reports', data: roomData.map(x => x.value) }]
+                    }
+                });
+            }
+
+            const equipmentCtx = document.getElementById('equipmentChart');
+            if (equipmentCtx) {
+                new Chart(equipmentCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: equipmentData.map(x => x.label),
+                        datasets: [{ label: 'Reports', data: equipmentData.map(x => x.value) }]
+                    }
+                });
+            }
+        })();
+    </script>
+}
