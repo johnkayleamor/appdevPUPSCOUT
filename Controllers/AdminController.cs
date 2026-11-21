@@ -283,6 +283,134 @@ public class AdminController(
         return RedirectToAction(nameof(Tickets));
     }
 
+    public async Task<IActionResult> Dashboard(DateTime? startDate, DateTime? endDate, DateTime? from, DateTime? to, DateTime? startParam, DateTime? endParam)
+    {
+        var startValue = startDate ?? from ?? startParam;
+        var endValue = endDate ?? to ?? endParam;
+        var start = (startValue ?? DateTime.UtcNow.AddDays(-30)).Date;
+        var end = (endValue ?? DateTime.UtcNow).Date;
+
+        var query = _dbContext.Tickets
+            .AsNoTracking()
+            .Include(t => t.Room).ThenInclude(r => r!.Floor).ThenInclude(f => f!.Building)
+            .Include(t => t.Equipment)
+            .Include(t => t.Reporter)
+            .Include(t => t.Assignee)
+            .Where(t => t.Status != TicketStatus.Closed && t.Status != TicketStatus.InvalidSpam)
+            .Where(t => t.CreatedAt >= start && t.CreatedAt <= end.AddDays(1))
+            .AsQueryable();
+
+        var tickets = await query.OrderByDescending(t => t.CreatedAt).ToListAsync();
+
+        var counts = tickets
+            .GroupBy(t => t.Status)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        foreach (var status in Enum.GetValues<TicketStatus>())
+        {
+            if (!counts.ContainsKey(status))
+            {
+                counts[status] = 0;
+            }
+        }
+
+        var model = new DashboardViewModel
+        {
+            StartDate = start,
+            EndDate = end,
+            Tickets = tickets,
+            Counts = counts,
+            StatusCounts = new Dictionary<TicketStatus, int>(counts),
+            TotalCount = tickets.Count
+        };
+
+        return View(model);
+    }
+
+    public async Task<IActionResult> MostReported(DateTime? startDate, DateTime? endDate, DateTime? from, DateTime? to, DateTime? startParam, DateTime? endParam)
+    {
+        return await BuildMostReported(startDate, endDate, from, to, startParam, endParam);
+    }
+
+    public Task<IActionResult> TopReported(DateTime? startDate, DateTime? endDate, DateTime? from, DateTime? to, DateTime? startParam, DateTime? endParam)
+        => BuildMostReported(startDate, endDate, from, to, startParam, endParam);
+
+    public Task<IActionResult> Reports(DateTime? startDate, DateTime? endDate, DateTime? from, DateTime? to, DateTime? startParam, DateTime? endParam)
+        => BuildMostReported(startDate, endDate, from, to, startParam, endParam);
+
+    public Task<IActionResult> TopRoomsEquipment(DateTime? startDate, DateTime? endDate, DateTime? from, DateTime? to, DateTime? startParam, DateTime? endParam)
+        => BuildMostReported(startDate, endDate, from, to, startParam, endParam);
+
+    private async Task<IActionResult> BuildMostReported(DateTime? startDate, DateTime? endDate, DateTime? from, DateTime? to, DateTime? startParam, DateTime? endParam)
+    {
+        var startValue = startDate ?? from ?? startParam;
+        var endValue = endDate ?? to ?? endParam;
+        var start = (startValue ?? DateTime.UtcNow.AddDays(-30)).Date;
+        var end = (endValue ?? DateTime.UtcNow).Date;
+
+        var tickets = await _dbContext.Tickets
+            .AsNoTracking()
+            .Include(t => t.Room)
+            .Include(t => t.Equipment)
+            .Where(t => t.Status != TicketStatus.InvalidSpam)
+            .Where(t => t.CreatedAt >= start && t.CreatedAt <= end.AddDays(1))
+            .ToListAsync();
+
+        var roomCounts = tickets
+            .Where(t => t.Room is not null)
+            .GroupBy(t => new { t.RoomId, RoomName = t.Room!.Name })
+            .Select(g => new RoomReportCount
+            {
+                RoomId = g.Key.RoomId,
+                RoomName = g.Key.RoomName,
+                Count = g.Count()
+            })
+            .OrderByDescending(x => x.Count)
+            .ThenBy(x => x.RoomName)
+            .ToList();
+
+        var equipmentCounts = tickets
+            .Where(t => t.Equipment is not null)
+            .GroupBy(t => new { t.EquipmentId, EquipmentName = t.Equipment!.Name })
+            .Select(g => new EquipmentReportCount
+            {
+                EquipmentId = g.Key.EquipmentId,
+                EquipmentName = g.Key.EquipmentName,
+                Count = g.Count()
+            })
+            .OrderByDescending(x => x.Count)
+            .ThenBy(x => x.EquipmentName)
+            .ToList();
+
+        var jsonOptions = new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+        };
+
+        var roomJson = System.Text.Json.JsonSerializer.Serialize(roomCounts.Select(r => new { label = r.RoomName, value = r.Count }), jsonOptions);
+        var equipmentJson = System.Text.Json.JsonSerializer.Serialize(equipmentCounts.Select(e => new { label = e.EquipmentName, value = e.Count }), jsonOptions);
+
+        var model = new MostReportedViewModel
+        {
+            StartDate = start,
+            EndDate = end,
+            RoomCounts = roomCounts,
+            EquipmentCounts = equipmentCounts,
+            TopRooms = roomCounts,
+            TopEquipment = equipmentCounts,
+            Rooms = roomCounts,
+            Equipment = equipmentCounts,
+            RoomCountsJson = roomJson,
+            EquipmentCountsJson = equipmentJson,
+            TopRoomsJson = roomJson,
+            TopEquipmentJson = equipmentJson,
+            RoomsJson = roomJson,
+            EquipmentJson = equipmentJson
+        };
+
+        return View("MostReported", model);
+    }
+
     public IActionResult Locations()
     {
         ViewBag.Buildings = _dbContext.Buildings.OrderBy(b => b.Name).ToList();
