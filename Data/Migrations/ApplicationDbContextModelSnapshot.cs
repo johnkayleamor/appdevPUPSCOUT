@@ -413,6 +413,9 @@ namespace appdevPUPSCOUT.Data.Migrations
                     b.Property<int>("Category")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("ClosureType")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
@@ -426,6 +429,9 @@ namespace appdevPUPSCOUT.Data.Migrations
                     b.Property<int>("Priority")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("RejectReason")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ReporterId")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -438,6 +444,9 @@ namespace appdevPUPSCOUT.Data.Migrations
 
                     b.Property<string>("TrackingNumber")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("VerificationStartedAt")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");

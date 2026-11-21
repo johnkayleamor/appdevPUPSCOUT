@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -7,9 +8,10 @@ using appdevPUPSCOUT.Models;
 
 namespace appdevPUPSCOUT.Services;
 
-public class AutoClosePendingVerificationService(IServiceScopeFactory scopeFactory, ILogger<AutoClosePendingVerificationService> logger) : BackgroundService
+public class AutoClosePendingVerificationService(IServiceScopeFactory scopeFactory, IConfiguration configuration, ILogger<AutoClosePendingVerificationService> logger) : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory = scopeFactory;
+    private readonly IConfiguration _configuration = configuration;
     private readonly ILogger<AutoClosePendingVerificationService> _logger = logger;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -40,7 +42,9 @@ public class AutoClosePendingVerificationService(IServiceScopeFactory scopeFacto
     {
         using var scope = _scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        var cutoff = DateTime.UtcNow.AddHours(-72);
+        var workflow = scope.ServiceProvider.GetRequiredService<TicketWorkflowService>();
+        var hours = _configuration.GetValue<int>("Verification:TimeLimitHours", 72);
+        var cutoff = DateTime.UtcNow.AddHours(-hours);
 
         var pending = await dbContext.Tickets
             .Include(t => t.StatusHistory)
@@ -57,22 +61,7 @@ public class AutoClosePendingVerificationService(IServiceScopeFactory scopeFacto
             var since = lastPending?.ChangedAt ?? ticket.CreatedAt;
             if (since > cutoff) continue;
 
-            ticket.Status = TicketStatus.Closed;
-
-            dbContext.TicketStatusHistories.Add(new TicketStatusHistory
-            {
-                TicketId = ticket.Id,
-                Status = TicketStatus.Closed,
-                ChangedByUserId = null,
-                ChangedAt = DateTime.UtcNow
-            });
-
-            await dbContext.SaveChangesAsync(cancellationToken);
-
-            var auditService = scope.ServiceProvider.GetRequiredService<AuditService>();
-            await auditService.Log(null, "AutoClose", ticket.Id,
-                $"Ticket {ticket.TrackingNumber} auto-closed after 72 hours without reporter response.",
-                ticket.ReporterId, null, "System");
+            await workflow.AutoCloseAsync(ticket.Id);
         }
     }
 }
