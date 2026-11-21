@@ -21,5 +21,6 @@ public class Ticket
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public List<TicketPhoto> Photos { get; set; } = new();
     public List<TicketNote> Notes { get; set; } = new();
+    public List<TicketComment> Comments { get; set; } = new();
     public List<TicketStatusHistory> StatusHistory { get; set; } = new();
 }

@@ -462,6 +462,26 @@ public class AdminController(
         return View(logs);
     }
 
+    public async Task<IActionResult> RoomHistory(int id)
+    {
+        var room = await _dbContext.Rooms
+            .Include(r => r.Floor).ThenInclude(f => f!.Building)
+            .FirstOrDefaultAsync(r => r.Id == id);
+        if (room is null) return NotFound();
+
+        var tickets = await _dbContext.Tickets
+            .AsNoTracking()
+            .Include(t => t.Equipment)
+            .Include(t => t.Reporter)
+            .Include(t => t.Assignee)
+            .Where(t => t.RoomId == id)
+            .OrderByDescending(t => t.CreatedAt)
+            .ToListAsync();
+
+        ViewBag.Tickets = tickets;
+        return View(room);
+    }
+
     public IActionResult Locations()
     {
         ViewBag.Buildings = _dbContext.Buildings.OrderBy(b => b.Name).ToList();

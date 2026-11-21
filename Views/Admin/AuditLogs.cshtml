@@ -82,7 +82,7 @@
                     <a class="page-link" asp-action="AuditLogs"
                        asp-route-page="@i"
                        asp-route-userId="@userId"
-                       asp-route-action="@action"
+                       asp-route-actionType="@action"
                        asp-route-from="@(from?.ToString("yyyy-MM-dd"))"
                        asp-route-to="@(to?.ToString("yyyy-MM-dd"))">@i</a>
                 </li>

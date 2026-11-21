@@ -6,6 +6,10 @@
 
 <h1>Ticket Details</h1>
 
+@{
+    var detailUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    var canSeeNames = User.IsInRole("Admin") || Model.AssigneeId == detailUserId;
+}
 <dl class="row">
     <dt class="col-sm-3">Tracking</dt>
     <dd class="col-sm-9">@Model.TrackingNumber</dd>
@@ -17,6 +21,10 @@
     <dd class="col-sm-9">@Model.Equipment?.Name</dd>
     <dt class="col-sm-3">Status</dt>
     <dd class="col-sm-9">@Model.Status</dd>
+    <dt class="col-sm-3">Reporter</dt>
+    <dd class="col-sm-9">@(canSeeNames ? (Model.Reporter?.Email ?? Model.ReporterId) : "Hidden")</dd>
+    <dt class="col-sm-3">Assignee</dt>
+    <dd class="col-sm-9">@(canSeeNames ? (Model.Assignee?.Email ?? "Unassigned") : "Hidden")</dd>
     <dt class="col-sm-3">Description</dt>
     <dd class="col-sm-9">@Model.Description</dd>
     <dt class="col-sm-3">Created</dt>
@@ -50,10 +58,55 @@ else
         {
             <li class="list-group-item">
                 <strong>@h.Status</strong>
-                <small class="text-muted"> - @h.ChangedAt.ToString("u") @(h.ChangedBy?.Email is null ? "" : $"by {h.ChangedBy.Email}")</small>
+                <small class="text-muted"> - @h.ChangedAt.ToString("u") @(canSeeNames && h.ChangedBy?.Email is not null ? $"by {h.ChangedBy.Email}" : "")</small>
             </li>
         }
     </ul>
+}
+
+<h2>Comments</h2>
+@if (Model.Comments is null || !Model.Comments.Any())
+{
+    <p>No comments yet.</p>
+}
+else
+{
+    <ul class="list-group mb-3">
+        @foreach (var c in Model.Comments.OrderBy(x => x.CreatedAt))
+        {
+            <li class="list-group-item">
+                <div class="d-flex justify-content-between">
+                    <strong>@(c.Author?.Email ?? c.AuthorId)</strong>
+                    <small class="text-muted">@c.AuthorRole - @c.CreatedAt.ToString("u")</small>
+                </div>
+                <div>@c.Content</div>
+                @if (User.IsInRole("Admin"))
+                {
+                    <form asp-action="RemoveComment" method="post" class="mt-2">
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <input type="hidden" name="commentId" value="@c.Id" />
+                        <button class="btn btn-sm btn-danger" type="submit">Remove</button>
+                    </form>
+                }
+            </li>
+        }
+    </ul>
+}
+
+@{
+    var isReadOnly = Model.Status == appdevPUPSCOUT.Models.TicketStatus.Closed || Model.Status == appdevPUPSCOUT.Models.TicketStatus.InvalidSpam;
+    var commentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    var canComment = !isReadOnly && (User.IsInRole("Admin") || Model.ReporterId == commentUserId || Model.AssigneeId == commentUserId);
+}
+@if (canComment)
+{
+    <form asp-action="AddComment" method="post" class="mb-3">
+        <input type="hidden" name="id" value="@Model.Id" />
+        <div class="mb-2">
+            <textarea name="content" class="form-control" rows="2" maxlength="2000" required placeholder="Add a comment"></textarea>
+        </div>
+        <button class="btn btn-primary" type="submit" style="min-height:44px;">Post Comment</button>
+    </form>
 }
 
 <h2>Notes</h2>

@@ -208,6 +208,7 @@ public class TicketsController(
             .Include(t => t.Equipment)
             .Include(t => t.Photos)
             .Include(t => t.Notes).ThenInclude(n => n.Author)
+            .Include(t => t.Comments).ThenInclude(c => c.Author)
             .Include(t => t.StatusHistory).ThenInclude(h => h.ChangedBy)
             .FirstOrDefaultAsync(t => t.Id == id);
 
@@ -352,6 +353,16 @@ public class TicketsController(
             Note = $"Rejected fix: {reason.Trim()}"
         });
 
+        var rejectRoles = await _userManager.GetRolesAsync(user);
+        _dbContext.TicketComments.Add(new TicketComment
+        {
+            TicketId = ticket.Id,
+            AuthorId = user.Id,
+            AuthorRole = rejectRoles.FirstOrDefault() ?? "User",
+            Content = $"Rejected fix: {reason.Trim()}",
+            CreatedAt = DateTime.UtcNow
+        });
+
         await _dbContext.SaveChangesAsync();
         await _auditService.Log(user.Id, "RejectFix", ticket.Id,
             $"Ticket {ticket.TrackingNumber}: {oldStatus} -> InProgress. Reason: {reason.Trim()}",
@@ -364,6 +375,97 @@ public class TicketsController(
     {
         if (User.IsInRole("Admin")) return true;
         if (ticket.ReporterId == user.Id && ticket.ReporterId != ticket.AssigneeId) return true;
+        return false;
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddComment(int id, string? content)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null) return Challenge();
+
+        var ticket = await _dbContext.Tickets.FirstOrDefaultAsync(t => t.Id == id);
+        if (ticket is null) return NotFound();
+
+        if (!CanAccessTicket(ticket, user))
+        {
+            return Forbid();
+        }
+
+        if (ticket.Status == TicketStatus.Closed || ticket.Status == TicketStatus.InvalidSpam)
+        {
+            TempData["Error"] = "Comments are read-only for this ticket.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        if (string.IsNullOrWhiteSpace(content) || content.Trim().Length > 2000)
+        {
+            TempData["Error"] = "A comment is required and must be 2000 characters or fewer.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var roles = await _userManager.GetRolesAsync(user);
+        _dbContext.TicketComments.Add(new TicketComment
+        {
+            TicketId = ticket.Id,
+            AuthorId = user.Id,
+            AuthorRole = roles.FirstOrDefault() ?? "User",
+            Content = content.Trim(),
+            CreatedAt = DateTime.UtcNow
+        });
+
+        await _dbContext.SaveChangesAsync();
+
+        var recipients = new HashSet<string>();
+        if (ticket.ReporterId != user.Id) recipients.Add(ticket.ReporterId);
+        if (!string.IsNullOrWhiteSpace(ticket.AssigneeId) && ticket.AssigneeId != user.Id) recipients.Add(ticket.AssigneeId!);
+
+        foreach (var recipientId in recipients)
+        {
+            var recipient = await _userManager.FindByIdAsync(recipientId);
+            if (recipient?.Email is not null)
+            {
+                await _emailSender.SendEmailAsync(recipient.Email,
+                    $"New comment on ticket {ticket.TrackingNumber}",
+                    $"A new comment was added to ticket {ticket.TrackingNumber}.");
+            }
+        }
+
+        TempData["Message"] = "Comment added.";
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RemoveComment(int id, int commentId)
+    {
+        if (!User.IsInRole("Admin")) return Forbid();
+
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null) return Challenge();
+
+        var ticket = await _dbContext.Tickets.FirstOrDefaultAsync(t => t.Id == id);
+        if (ticket is null) return NotFound();
+
+        var comment = await _dbContext.TicketComments.FirstOrDefaultAsync(c => c.Id == commentId && c.TicketId == id);
+        if (comment is null) return NotFound();
+
+        _dbContext.TicketComments.Remove(comment);
+        await _dbContext.SaveChangesAsync();
+
+        await _auditService.Log(user.Id, "RemoveComment", ticket.Id,
+            $"Comment {commentId} removed.", ticket.ReporterId, null, user.Email);
+
+        TempData["Message"] = "Comment removed.";
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    private bool CanAccessTicket(Ticket ticket, ApplicationUser user)
+    {
+        if (User.IsInRole("Admin")) return true;
+        if (ticket.ReporterId == user.Id) return true;
+        if (!string.IsNullOrWhiteSpace(ticket.AssigneeId) && ticket.AssigneeId == user.Id) return true;
         return false;
     }
 

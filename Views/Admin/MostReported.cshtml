@@ -28,7 +28,7 @@
     <tbody>
         @foreach (var r in Model.RoomCounts)
         {
-            <tr><td>@r.RoomName</td><td>@r.Count</td></tr>
+            <tr><td><a asp-action="RoomHistory" asp-route-id="@r.RoomId">@r.RoomName</a></td><td>@r.Count</td></tr>
         }
     </tbody>
 </table>

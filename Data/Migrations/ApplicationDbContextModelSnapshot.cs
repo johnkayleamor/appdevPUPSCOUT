@@ -457,6 +457,40 @@ namespace appdevPUPSCOUT.Data.Migrations
                     b.ToTable("Tickets");
                 });
 
+            modelBuilder.Entity("appdevPUPSCOUT.Models.TicketComment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AuthorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AuthorRole")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TicketId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorId");
+
+                    b.HasIndex("TicketId");
+
+                    b.ToTable("TicketComments");
+                });
+
             modelBuilder.Entity("appdevPUPSCOUT.Models.TicketNote", b =>
                 {
                     b.Property<int>("Id")
@@ -654,6 +688,25 @@ namespace appdevPUPSCOUT.Data.Migrations
                     b.Navigation("Room");
                 });
 
+            modelBuilder.Entity("appdevPUPSCOUT.Models.TicketComment", b =>
+                {
+                    b.HasOne("appdevPUPSCOUT.Models.ApplicationUser", "Author")
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("appdevPUPSCOUT.Models.Ticket", "Ticket")
+                        .WithMany("Comments")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Author");
+
+                    b.Navigation("Ticket");
+                });
+
             modelBuilder.Entity("appdevPUPSCOUT.Models.TicketNote", b =>
                 {
                     b.HasOne("appdevPUPSCOUT.Models.ApplicationUser", "Author")
@@ -719,6 +772,8 @@ namespace appdevPUPSCOUT.Data.Migrations
 
             modelBuilder.Entity("appdevPUPSCOUT.Models.Ticket", b =>
                 {
+                    b.Navigation("Comments");
+
                     b.Navigation("Notes");
 
                     b.Navigation("Photos");

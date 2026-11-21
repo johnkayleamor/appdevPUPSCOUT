@@ -13,6 +13,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Ticket> Tickets => Set<Ticket>();
     public DbSet<TicketPhoto> TicketPhotos => Set<TicketPhoto>();
     public DbSet<TicketNote> TicketNotes => Set<TicketNote>();
+    public DbSet<TicketComment> TicketComments => Set<TicketComment>();
     public DbSet<TicketStatusHistory> TicketStatusHistories => Set<TicketStatusHistory>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<OtpCode> OtpCodes => Set<OtpCode>();
@@ -41,6 +42,11 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(n => n.TicketId).OnDelete(DeleteBehavior.Cascade);
         builder.Entity<TicketNote>().HasOne(n => n.Author).WithMany()
             .HasForeignKey(n => n.AuthorId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<TicketComment>().HasOne(c => c.Ticket).WithMany(t => t.Comments)
+            .HasForeignKey(c => c.TicketId).OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<TicketComment>().HasOne(c => c.Author).WithMany()
+            .HasForeignKey(c => c.AuthorId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<TicketStatusHistory>().HasOne(h => h.Ticket).WithMany(t => t.StatusHistory)
             .HasForeignKey(h => h.TicketId).OnDelete(DeleteBehavior.Cascade);
         builder.Entity<TicketStatusHistory>().HasOne(h => h.ChangedBy).WithMany()
