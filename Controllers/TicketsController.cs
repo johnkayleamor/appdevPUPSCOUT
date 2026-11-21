@@ -13,12 +13,16 @@ public class TicketsController(
     ApplicationDbContext dbContext,
     UserManager<ApplicationUser> userManager,
     IWebHostEnvironment environment,
-    Services.TicketWorkflowService ticketWorkflowService) : Controller
+    Services.TicketWorkflowService ticketWorkflowService,
+    Microsoft.AspNetCore.Identity.UI.Services.IEmailSender emailSender,
+    Services.AuditService auditService) : Controller
 {
     private readonly ApplicationDbContext _dbContext = dbContext;
     private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly IWebHostEnvironment _environment = environment;
     private readonly Services.TicketWorkflowService _ticketWorkflowService = ticketWorkflowService;
+    private readonly Microsoft.AspNetCore.Identity.UI.Services.IEmailSender _emailSender = emailSender;
+    private readonly Services.AuditService _auditService = auditService;
 
     public IActionResult Create(int? buildingId, int? floorId, int? roomId)
     {
@@ -243,9 +247,124 @@ public class TicketsController(
         else
         {
             TempData["Message"] = "Status updated.";
+
+            if (newStatus == TicketStatus.PendingVerification)
+            {
+                var reporter = await _userManager.FindByIdAsync(ticket.ReporterId);
+                if (reporter?.Email is not null)
+                {
+                    await _emailSender.SendEmailAsync(reporter.Email,
+                        $"Ticket {ticket.TrackingNumber} pending verification",
+                        $"Work on ticket {ticket.TrackingNumber} has been marked complete. Please confirm or reject the fix.");
+                }
+            }
         }
 
         return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ConfirmFix(int id)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null) return Challenge();
+
+        var ticket = await _dbContext.Tickets
+            .Include(t => t.Reporter)
+            .FirstOrDefaultAsync(t => t.Id == id);
+        if (ticket is null) return NotFound();
+
+        if (!CanConfirmOrReject(ticket, user))
+        {
+            return Forbid();
+        }
+
+        if (ticket.Status != TicketStatus.PendingVerification)
+        {
+            TempData["Error"] = "Ticket is not pending verification.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var oldStatus = ticket.Status;
+        ticket.Status = TicketStatus.Closed;
+
+        _dbContext.TicketStatusHistories.Add(new TicketStatusHistory
+        {
+            TicketId = ticket.Id,
+            Status = TicketStatus.Closed,
+            ChangedByUserId = user.Id,
+            ChangedAt = DateTime.UtcNow
+        });
+
+        await _dbContext.SaveChangesAsync();
+        await _auditService.Log(user.Id, "ConfirmFix", ticket.Id,
+            $"Ticket {ticket.TrackingNumber}: {oldStatus} -> Closed.",
+            ticket.ReporterId, ticket.Reporter?.Email, user.Email);
+        TempData["Message"] = "Ticket confirmed and closed.";
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RejectFix(int id, string? reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            TempData["Error"] = "A reason is required to reject the fix.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null) return Challenge();
+
+        var ticket = await _dbContext.Tickets
+            .Include(t => t.Reporter)
+            .FirstOrDefaultAsync(t => t.Id == id);
+        if (ticket is null) return NotFound();
+
+        if (!CanConfirmOrReject(ticket, user))
+        {
+            return Forbid();
+        }
+
+        if (ticket.Status != TicketStatus.PendingVerification)
+        {
+            TempData["Error"] = "Ticket is not pending verification.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var oldStatus = ticket.Status;
+        ticket.Status = TicketStatus.InProgress;
+
+        _dbContext.TicketStatusHistories.Add(new TicketStatusHistory
+        {
+            TicketId = ticket.Id,
+            Status = TicketStatus.InProgress,
+            ChangedByUserId = user.Id,
+            ChangedAt = DateTime.UtcNow
+        });
+
+        _dbContext.TicketNotes.Add(new TicketNote
+        {
+            TicketId = ticket.Id,
+            AuthorId = user.Id,
+            Note = $"Rejected fix: {reason.Trim()}"
+        });
+
+        await _dbContext.SaveChangesAsync();
+        await _auditService.Log(user.Id, "RejectFix", ticket.Id,
+            $"Ticket {ticket.TrackingNumber}: {oldStatus} -> InProgress. Reason: {reason.Trim()}",
+            ticket.ReporterId, ticket.Reporter?.Email, user.Email);
+        TempData["Message"] = "Fix rejected; ticket returned to In Progress.";
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    private bool CanConfirmOrReject(Ticket ticket, ApplicationUser user)
+    {
+        if (User.IsInRole("Admin")) return true;
+        if (ticket.ReporterId == user.Id && ticket.ReporterId != ticket.AssigneeId) return true;
+        return false;
     }
 
     public async Task<IActionResult> Assigned(string? status, string? priority)

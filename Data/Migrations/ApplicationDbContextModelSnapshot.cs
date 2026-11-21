@@ -226,6 +226,9 @@ namespace appdevPUPSCOUT.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ActorId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("AdminId")
                         .HasColumnType("TEXT");
 
@@ -233,6 +236,9 @@ namespace appdevPUPSCOUT.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Details")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Reason")
@@ -244,6 +250,9 @@ namespace appdevPUPSCOUT.Data.Migrations
 
                     b.Property<string>("TargetUserId")
                         .HasColumnType("TEXT");
+
+                    b.Property<int?>("TicketId")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 

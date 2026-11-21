@@ -29,7 +29,9 @@ builder.Services.AddScoped<appdevPUPSCOUT.Services.TrackingNumberGenerator>();
 builder.Services.AddScoped<appdevPUPSCOUT.Services.TicketWorkflowService>();
 builder.Services.AddScoped<appdevPUPSCOUT.Services.RoutingService>();
 builder.Services.AddScoped<appdevPUPSCOUT.Services.PriorityService>();
+builder.Services.AddScoped<appdevPUPSCOUT.Services.AuditService>();
 builder.Services.AddHostedService<appdevPUPSCOUT.Services.SuspensionCleanupService>();
+builder.Services.AddHostedService<appdevPUPSCOUT.Services.AutoClosePendingVerificationService>();
 
 builder.Services.ConfigureApplicationCookie(options =>
 {

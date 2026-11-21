@@ -4,10 +4,11 @@ using appdevPUPSCOUT.Models;
 
 namespace appdevPUPSCOUT.Services;
 
-public class RoutingService(UserManager<ApplicationUser> userManager, ApplicationDbContext dbContext)
+public class RoutingService(UserManager<ApplicationUser> userManager, ApplicationDbContext dbContext, AuditService auditService)
 {
     private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly ApplicationDbContext _dbContext = dbContext;
+    private readonly AuditService _auditService = auditService;
 
     public async Task<ApplicationUser?> GetAssigneeAsync(TicketCategory category)
     {
@@ -36,16 +37,8 @@ public class RoutingService(UserManager<ApplicationUser> userManager, Applicatio
         });
         await _dbContext.SaveChangesAsync();
 
-        _dbContext.AuditLogs.Add(new AuditLog
-        {
-            TargetUserId = ticket.ReporterId,
-            TargetUserEmail = ticket.Reporter?.Email,
-            AdminId = null,
-            AdminName = "System",
-            Action = "AutoAssign",
-            Reason = $"Ticket {ticket.TrackingNumber} auto-assigned to {assignee.Email}.",
-            CreatedAt = DateTime.UtcNow
-        });
-        await _dbContext.SaveChangesAsync();
+        await _auditService.Log(null, "AutoAssign", ticket.Id,
+            $"Ticket {ticket.TrackingNumber} auto-assigned to {assignee.Email}.",
+            ticket.ReporterId, ticket.Reporter?.Email, "System");
     }
 }

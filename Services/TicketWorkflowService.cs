@@ -4,12 +4,13 @@ using Microsoft.AspNetCore.Identity;
 
 namespace appdevPUPSCOUT.Services;
 
-public class TicketWorkflowService(ApplicationDbContext dbContext, TrackingNumberGenerator trackingNumberGenerator, RoutingService routingService, PriorityService priorityService)
+public class TicketWorkflowService(ApplicationDbContext dbContext, TrackingNumberGenerator trackingNumberGenerator, RoutingService routingService, PriorityService priorityService, AuditService auditService)
 {
     private readonly ApplicationDbContext _dbContext = dbContext;
     private readonly TrackingNumberGenerator _trackingNumberGenerator = trackingNumberGenerator;
     private readonly RoutingService _routingService = routingService;
     private readonly PriorityService _priorityService = priorityService;
+    private readonly AuditService _auditService = auditService;
 
     public async Task<Ticket> CreateAsync(TicketCreateViewModel model, ApplicationUser reporter)
     {
@@ -39,6 +40,7 @@ public class TicketWorkflowService(ApplicationDbContext dbContext, TrackingNumbe
         await _dbContext.SaveChangesAsync();
 
         await _routingService.AssignAsync(ticket);
+        await _auditService.Log(reporter.Id, "Create", ticket.Id, $"Ticket {ticket.TrackingNumber} created.", reporter.Id, reporter.Email, reporter.Email);
         return ticket;
     }
 
@@ -85,17 +87,9 @@ public class TicketWorkflowService(ApplicationDbContext dbContext, TrackingNumbe
             });
         }
 
-        _dbContext.AuditLogs.Add(new AuditLog
-        {
-            TargetUserId = ticket.ReporterId,
-            AdminId = userId,
-            AdminName = null,
-            Action = "StatusChange",
-            Reason = $"Ticket {ticket.TrackingNumber}: {oldStatus} -> {newStatus}. {note}".Trim(),
-            CreatedAt = DateTime.UtcNow
-        });
-
-        await _dbContext.SaveChangesAsync();
+        await _auditService.Log(userId, "StatusChange", ticket.Id,
+            $"Ticket {ticket.TrackingNumber}: {oldStatus} -> {newStatus}. {note}".Trim(),
+            ticket.ReporterId, null, null);
         return (true, null);
     }
 }

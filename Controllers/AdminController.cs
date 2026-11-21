@@ -12,12 +12,14 @@ public class AdminController(
     UserManager<ApplicationUser> userManager,
     RoleManager<IdentityRole> roleManager,
     ApplicationDbContext dbContext,
-    Microsoft.AspNetCore.Identity.UI.Services.IEmailSender emailSender) : Controller
+    Microsoft.AspNetCore.Identity.UI.Services.IEmailSender emailSender,
+    Services.AuditService auditService) : Controller
 {
     private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly RoleManager<IdentityRole> _roleManager = roleManager;
     private readonly ApplicationDbContext _dbContext = dbContext;
     private readonly Microsoft.AspNetCore.Identity.UI.Services.IEmailSender _emailSender = emailSender;
+    private readonly Services.AuditService _auditService = auditService;
 
     public async Task<IActionResult> Users()
     {
@@ -67,6 +69,9 @@ public class AdminController(
 
         await _userManager.AddToRoleAsync(user, role);
 
+        var admin = await _userManager.GetUserAsync(User);
+        await _auditService.Log(admin?.Id, "RoleChange", null, $"Role changed to {role}.", user.Id, user.Email, User.Identity?.Name);
+
         return RedirectToAction(nameof(Users));
     }
 
@@ -95,7 +100,8 @@ public class AdminController(
         var until = DateTimeOffset.UtcNow.AddDays(days);
         await _userManager.SetLockoutEndDateAsync(user, until);
 
-        await LogAction(user, "Suspend", reason);
+        var adminUser = await _userManager.GetUserAsync(User);
+        await _auditService.Log(adminUser?.Id, "Suspend", null, reason, user.Id, user.Email, User.Identity?.Name);
         await _emailSender.SendEmailAsync(user.Email!, "Account suspended",
             $"Your account has been suspended until {until:u}. Reason: {reason}. To appeal, contact admin@pup.edu.ph.");
 
@@ -122,7 +128,8 @@ public class AdminController(
         await _userManager.UpdateAsync(user);
         await _userManager.SetLockoutEndDateAsync(user, DateTimeOffset.MaxValue);
 
-        await LogAction(user, "Deactivate", reason);
+        var adminUser = await _userManager.GetUserAsync(User);
+        await _auditService.Log(adminUser?.Id, "Deactivate", null, reason, user.Id, user.Email, User.Identity?.Name);
         await _emailSender.SendEmailAsync(user.Email!, "Account deactivated",
             $"Your account has been deactivated. Reason: {reason}. To appeal, contact admin@pup.edu.ph.");
 
@@ -234,16 +241,9 @@ public class AdminController(
         await _dbContext.SaveChangesAsync();
 
         var assignee = string.IsNullOrWhiteSpace(assigneeId) ? null : await _userManager.FindByIdAsync(assigneeId);
-        _dbContext.AuditLogs.Add(new AuditLog
-        {
-            TargetUserId = ticket.ReporterId,
-            AdminId = admin?.Id,
-            AdminName = User.Identity?.Name,
-            Action = "Assign",
-            Reason = $"Ticket {ticket.TrackingNumber} reassigned from {previousAssigneeId ?? "unassigned"} to {assignee?.Email ?? "unassigned"}.",
-            CreatedAt = DateTime.UtcNow
-        });
-        await _dbContext.SaveChangesAsync();
+        await _auditService.Log(admin?.Id, "Assign", ticket.Id,
+            $"Ticket {ticket.TrackingNumber} reassigned from {previousAssigneeId ?? "unassigned"} to {assignee?.Email ?? "unassigned"}.",
+            ticket.ReporterId, null, User.Identity?.Name);
 
         TempData["Message"] = "Ticket assignment updated.";
         return RedirectToAction(nameof(Tickets));
@@ -257,7 +257,9 @@ public class AdminController(
         if (ticket is null) return NotFound();
 
         ticket.Priority = priority;
-        await _dbContext.SaveChangesAsync();
+        var admin = await _userManager.GetUserAsync(User);
+        await _auditService.Log(admin?.Id, "ChangePriority", ticket.Id,
+            $"Ticket {ticket.TrackingNumber} priority changed to {priority}.", ticket.ReporterId, null, User.Identity?.Name);
         TempData["Message"] = "Priority updated.";
         return RedirectToAction(nameof(Tickets));
     }
@@ -278,7 +280,8 @@ public class AdminController(
             ChangedByUserId = admin?.Id,
             ChangedAt = DateTime.UtcNow
         });
-        await _dbContext.SaveChangesAsync();
+        await _auditService.Log(admin?.Id, "MarkInvalid", ticket.Id,
+            $"Ticket {ticket.TrackingNumber} marked invalid/spam.", ticket.ReporterId, null, User.Identity?.Name);
         TempData["Message"] = "Ticket marked invalid/spam.";
         return RedirectToAction(nameof(Tickets));
     }
@@ -409,6 +412,54 @@ public class AdminController(
         };
 
         return View("MostReported", model);
+    }
+
+    public async Task<IActionResult> AuditLogs(string? userId, DateTime? from, DateTime? to, int page = 1)
+    {
+        const int pageSize = 20;
+
+        var action = Request.Query["action"].FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(action))
+        {
+            action = Request.Query["actionType"].FirstOrDefault();
+        }
+
+        var query = _dbContext.AuditLogs.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(userId))
+        {
+            query = query.Where(a => a.ActorId == userId || a.AdminId == userId || a.TargetUserId == userId);
+        }
+        if (!string.IsNullOrWhiteSpace(action))
+        {
+            query = query.Where(a => a.Action == action);
+        }
+        if (from.HasValue)
+        {
+            query = query.Where(a => a.CreatedAt >= from.Value);
+        }
+        if (to.HasValue)
+        {
+            query = query.Where(a => a.CreatedAt <= to.Value.AddDays(1));
+        }
+
+        query = query.OrderByDescending(a => a.CreatedAt);
+
+        var total = await query.CountAsync();
+        var logs = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+
+        ViewBag.Total = total;
+        ViewBag.Page = page;
+        ViewBag.PageSize = pageSize;
+        ViewBag.TotalPages = (int)Math.Ceiling(total / (double)pageSize);
+        ViewBag.UserId = userId;
+        ViewBag.Action = action;
+        ViewBag.From = from;
+        ViewBag.To = to;
+        ViewBag.Users = _userManager.Users.OrderBy(u => u.Email).ToList();
+        ViewBag.Actions = await _dbContext.AuditLogs.Select(a => a.Action).Distinct().OrderBy(a => a).ToListAsync();
+
+        return View(logs);
     }
 
     public IActionResult Locations()
@@ -610,7 +661,8 @@ public class AdminController(
         await _userManager.UpdateAsync(user);
         await _userManager.SetLockoutEndDateAsync(user, null);
 
-        await LogAction(user, "Reactivate", reason);
+        var adminUser = await _userManager.GetUserAsync(User);
+        await _auditService.Log(adminUser?.Id, "Reactivate", null, reason, user.Id, user.Email, User.Identity?.Name);
         await _emailSender.SendEmailAsync(user.Email!, "Account reactivated",
             $"Your account has been reactivated. Reason: {reason}.");
 

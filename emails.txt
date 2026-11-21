@@ -38,3 +38,15 @@ To: testuser4@pup.edu.ph
 Subject: Confirm your email
 Your verification code is: <b>179555</b>. It expires in 10 minutes.
 ---
+To: student@pup.edu.ph
+Subject: Ticket 780C2AAF3CAB pending verification
+Work on ticket 780C2AAF3CAB has been marked complete. Please confirm or reject the fix.
+---
+To: student@pup.edu.ph
+Subject: Ticket 51F4F86022F3 pending verification
+Work on ticket 51F4F86022F3 has been marked complete. Please confirm or reject the fix.
+---
+To: itpersonnel@pup.edu.ph
+Subject: Ticket 4D2F5E201240 pending verification
+Work on ticket 4D2F5E201240 has been marked complete. Please confirm or reject the fix.
+---

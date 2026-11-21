@@ -1,0 +1,92 @@
+@model List<appdevPUPSCOUT.Models.AuditLog>
+
+@{
+    ViewData["Title"] = "Audit Logs";
+    int page = ViewBag.Page;
+    int totalPages = ViewBag.TotalPages;
+    string? userId = ViewBag.UserId;
+    string? action = ViewBag.Action;
+    DateTime? from = ViewBag.From;
+    DateTime? to = ViewBag.To;
+    var users = (List<appdevPUPSCOUT.Models.ApplicationUser>)ViewBag.Users;
+    var actions = (List<string>)ViewBag.Actions;
+}
+
+<h1>Audit Logs</h1>
+
+<form method="get" asp-action="AuditLogs" class="row g-2 mb-3">
+    <div class="col-md-3">
+        <select name="userId" class="form-select">
+            <option value="">All users</option>
+            @foreach (var u in users)
+            {
+                <option value="@u.Id" selected="@(userId == u.Id ? "selected" : null)">@u.Email</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select name="action" class="form-select">
+            <option value="">All actions</option>
+            @foreach (var a in actions)
+            {
+                <option value="@a" selected="@(action == a ? "selected" : null)">@a</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-2">
+        <input type="date" name="from" value="@(from?.ToString("yyyy-MM-dd"))" class="form-control" />
+    </div>
+    <div class="col-md-2">
+        <input type="date" name="to" value="@(to?.ToString("yyyy-MM-dd"))" class="form-control" />
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+        <button class="btn btn-primary" type="submit">Filter</button>
+    </div>
+</form>
+
+<table class="table table-sm">
+    <thead>
+        <tr>
+            <th>Id</th>
+            <th>When</th>
+            <th>Actor</th>
+            <th>Action</th>
+            <th>Ticket</th>
+            <th>Target</th>
+            <th>Details</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var log in Model)
+        {
+            <tr>
+                <td>@log.Id</td>
+                <td>@log.CreatedAt.ToString("u")</td>
+                <td>@(log.AdminName ?? log.ActorId ?? log.AdminId)</td>
+                <td>@log.Action</td>
+                <td>@(log.TicketId.HasValue ? log.TicketId.ToString() : "")</td>
+                <td>@(log.TargetUserEmail ?? log.TargetUserId)</td>
+                <td>@(log.Details ?? log.Reason)</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@if (totalPages > 1)
+{
+    <nav>
+        <ul class="pagination">
+            @for (int i = 1; i <= totalPages; i++)
+            {
+                <li class="page-item @(i == page ? "active" : "")">
+                    <a class="page-link" asp-action="AuditLogs"
+                       asp-route-page="@i"
+                       asp-route-userId="@userId"
+                       asp-route-action="@action"
+                       asp-route-from="@(from?.ToString("yyyy-MM-dd"))"
+                       asp-route-to="@(to?.ToString("yyyy-MM-dd"))">@i</a>
+                </li>
+            }
+        </ul>
+    </nav>
+}
