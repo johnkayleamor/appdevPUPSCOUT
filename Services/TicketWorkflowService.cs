@@ -4,13 +4,15 @@ using Microsoft.AspNetCore.Identity;
 
 namespace appdevPUPSCOUT.Services;
 
-public class TicketWorkflowService(ApplicationDbContext dbContext, TrackingNumberGenerator trackingNumberGenerator, RoutingService routingService, PriorityService priorityService, AuditService auditService)
+public class TicketWorkflowService(ApplicationDbContext dbContext, TrackingNumberGenerator trackingNumberGenerator, RoutingService routingService, PriorityService priorityService, AuditService auditService, NotificationService notificationService, UserManager<ApplicationUser> userManager)
 {
     private readonly ApplicationDbContext _dbContext = dbContext;
     private readonly TrackingNumberGenerator _trackingNumberGenerator = trackingNumberGenerator;
     private readonly RoutingService _routingService = routingService;
     private readonly PriorityService _priorityService = priorityService;
     private readonly AuditService _auditService = auditService;
+    private readonly NotificationService _notificationService = notificationService;
+    private readonly UserManager<ApplicationUser> _userManager = userManager;
 
     public async Task<Ticket> CreateAsync(TicketCreateViewModel model, ApplicationUser reporter)
     {
@@ -41,6 +43,14 @@ public class TicketWorkflowService(ApplicationDbContext dbContext, TrackingNumbe
 
         await _routingService.AssignAsync(ticket);
         await _auditService.Log(reporter.Id, "Create", ticket.Id, $"Ticket {ticket.TrackingNumber} created.", reporter.Id, reporter.Email, reporter.Email);
+
+        var admins = await _userManager.GetUsersInRoleAsync("Admin");
+        foreach (var admin in admins)
+        {
+            if (admin.Id == reporter.Id) continue;
+            await _notificationService.NotifyAsync(admin.Id, ticket.Id, ticket.TrackingNumber,
+                $"New report {ticket.TrackingNumber} submitted.", $"/Tickets/Details/{ticket.Id}");
+        }
         return ticket;
     }
 
@@ -99,6 +109,12 @@ public class TicketWorkflowService(ApplicationDbContext dbContext, TrackingNumbe
         await _auditService.Log(userId, "StatusChange", ticket.Id,
             $"Ticket {ticket.TrackingNumber}: {oldStatus} -> {newStatus}. {note}".Trim(),
             ticket.ReporterId, null, null);
+
+        if (userId != ticket.ReporterId)
+        {
+            await _notificationService.NotifyAsync(ticket.ReporterId, ticket.Id, ticket.TrackingNumber,
+                $"Ticket {ticket.TrackingNumber} status changed to {newStatus}.", $"/Tickets/Details/{ticket.Id}");
+        }
         return (true, null);
     }
 
@@ -141,6 +157,12 @@ public class TicketWorkflowService(ApplicationDbContext dbContext, TrackingNumbe
         await _auditService.Log(userId, isAdmin ? "ConfirmByAdmin" : "ConfirmFix", ticket.Id,
             $"Ticket {ticket.TrackingNumber} confirmed and closed.",
             ticket.ReporterId, null, null);
+
+        if (userId != ticket.ReporterId)
+        {
+            await _notificationService.NotifyAsync(ticket.ReporterId, ticket.Id, ticket.TrackingNumber,
+                $"Ticket {ticket.TrackingNumber} was closed.", $"/Tickets/Details/{ticket.Id}");
+        }
         return (true, null);
     }
 
@@ -190,7 +212,67 @@ public class TicketWorkflowService(ApplicationDbContext dbContext, TrackingNumbe
         await _auditService.Log(userId, isAdmin ? "RejectByAdmin" : "RejectFix", ticket.Id,
             $"Ticket {ticket.TrackingNumber} rejected. Reason: {reason.Trim()}",
             ticket.ReporterId, null, null);
+
+        await _notificationService.NotifyAsync(ticket.ReporterId, ticket.Id, ticket.TrackingNumber,
+            $"Ticket {ticket.TrackingNumber} was rejected and returned to In Progress.", $"/Tickets/Details/{ticket.Id}");
+        if (!string.IsNullOrWhiteSpace(ticket.AssigneeId) && ticket.AssigneeId != userId)
+        {
+            await _notificationService.NotifyAsync(ticket.AssigneeId, ticket.Id, ticket.TrackingNumber,
+                $"Ticket {ticket.TrackingNumber} was rejected. Reason: {reason.Trim()}", $"/Tickets/Details/{ticket.Id}");
+        }
         return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> AddCommentAsync(int ticketId, string userId, string content)
+    {
+        var ticket = await _dbContext.Tickets.FindAsync(ticketId);
+        if (ticket is null) return (false, "Ticket not found.");
+
+        if (ticket.Status == TicketStatus.Closed || ticket.Status == TicketStatus.InvalidSpam)
+        {
+            return (false, "Comments are read-only for this ticket.");
+        }
+
+        if (string.IsNullOrWhiteSpace(content) || content.Trim().Length > 2000)
+        {
+            return (false, "A comment is required and must be 2000 characters or fewer.");
+        }
+
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user is null) return (false, "User not found.");
+
+        var roles = await _userManager.GetRolesAsync(user);
+        _dbContext.TicketComments.Add(new TicketComment
+        {
+            TicketId = ticket.Id,
+            AuthorId = user.Id,
+            AuthorRole = roles.FirstOrDefault() ?? "User",
+            Content = content.Trim(),
+            CreatedAt = DateTime.UtcNow
+        });
+
+        await _dbContext.SaveChangesAsync();
+
+        var recipients = new HashSet<string>();
+        if (ticket.ReporterId != user.Id) recipients.Add(ticket.ReporterId);
+        if (!string.IsNullOrWhiteSpace(ticket.AssigneeId) && ticket.AssigneeId != user.Id) recipients.Add(ticket.AssigneeId!);
+
+        foreach (var recipientId in recipients)
+        {
+            await _notificationService.NotifyAsync(recipientId, ticket.Id, ticket.TrackingNumber,
+                $"New comment on ticket {ticket.TrackingNumber}.", $"/Tickets/Details/{ticket.Id}");
+        }
+
+        return (true, null);
+    }
+
+    public async Task NotifyAssignmentAsync(Ticket ticket, ApplicationUser? assignee, string? previousAssigneeId, string? actorId)
+    {
+        if (assignee is null) return;
+        if (assignee.Id == actorId) return;
+
+        await _notificationService.NotifyAsync(assignee.Id, ticket.Id, ticket.TrackingNumber,
+            $"Ticket {ticket.TrackingNumber} was assigned to you.", $"/Tickets/Details/{ticket.Id}");
     }
 
     public async Task AutoCloseAsync(int ticketId)
@@ -212,5 +294,8 @@ public class TicketWorkflowService(ApplicationDbContext dbContext, TrackingNumbe
         await _auditService.Log(null, "AutoClose", ticket.Id,
             $"Ticket {ticket.TrackingNumber} auto-closed after time limit.",
             ticket.ReporterId, null, "System");
+
+        await _notificationService.NotifyAsync(ticket.ReporterId, ticket.Id, ticket.TrackingNumber,
+            $"Ticket {ticket.TrackingNumber} was auto-closed.", $"/Tickets/Details/{ticket.Id}");
     }
 }

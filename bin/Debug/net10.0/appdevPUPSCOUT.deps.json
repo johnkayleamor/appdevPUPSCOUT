@@ -8,6 +8,7 @@
     ".NETCoreApp,Version=v10.0": {
       "appdevPUPSCOUT/1.0.0": {
         "dependencies": {
+          "MailKit": "5.0.0",
           "Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore": "10.0.13",
           "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "10.0.13",
           "Microsoft.AspNetCore.Identity.UI": "10.0.13",
@@ -23,6 +24,17 @@
           "lib/net6.0/Humanizer.dll": {
             "assemblyVersion": "2.14.0.0",
             "fileVersion": "2.14.1.48190"
+          }
+        }
+      },
+      "MailKit/5.0.0": {
+        "dependencies": {
+          "MimeKit.Core": "5.0.0"
+        },
+        "runtime": {
+          "lib/net10.0/MailKit.dll": {
+            "assemblyVersion": "5.0.0.0",
+            "fileVersion": "5.0.0.0"
           }
         }
       },
@@ -434,6 +446,14 @@
           }
         }
       },
+      "MimeKit.Core/5.0.0": {
+        "runtime": {
+          "lib/net10.0/MimeKit.Core.dll": {
+            "assemblyVersion": "5.0.0.0",
+            "fileVersion": "5.0.0.0"
+          }
+        }
+      },
       "Mono.TextTemplating/3.0.0": {
         "dependencies": {
           "System.CodeDom": "6.0.0"
@@ -681,6 +701,13 @@
       "path": "humanizer.core/2.14.1",
       "hashPath": "humanizer.core.2.14.1.nupkg.sha512"
     },
+    "MailKit/5.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-PG6hnsklTzd/iK9A6j03OxDOas9mh8zOBkbPzcsLmFOODE8Hw3HTy7HAKiJvVHXNpKc3/KMVG/4QvOAKCBbGhA==",
+      "path": "mailkit/5.0.0",
+      "hashPath": "mailkit.5.0.0.nupkg.sha512"
+    },
     "Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore/10.0.13": {
       "type": "package",
       "serviceable": true,
@@ -806,6 +833,13 @@
       "sha512": "sha512-oNv2JtYXhpdJrX63nibx1JT3uCESOBQ1LAk7Dtz/sr0+laW0KRM6eKp4CZ3MHDR2siIkKsY8MmUkeP5DKkQQ5w==",
       "path": "microsoft.visualstudio.solutionpersistence/1.0.52",
       "hashPath": "microsoft.visualstudio.solutionpersistence.1.0.52.nupkg.sha512"
+    },
+    "MimeKit.Core/5.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-0RLaVyex/BjUGqiw9xtGwzyCMaBcsu33Rth61bDCeVeQaaQK7tjcy4TA+nHKTqwUdp4OGd+gnhuq2fuR+c20qA==",
+      "path": "mimekit.core/5.0.0",
+      "hashPath": "mimekit.core.5.0.0.nupkg.sha512"
     },
     "Mono.TextTemplating/3.0.0": {
       "type": "package",

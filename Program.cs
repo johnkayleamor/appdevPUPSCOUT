@@ -23,13 +23,24 @@ builder.Services.AddDefaultIdentity<ApplicationUser>(options =>
     .AddRoles<IdentityRole>()
     .AddEntityFrameworkStores<ApplicationDbContext>();
 
-builder.Services.AddTransient<Microsoft.AspNetCore.Identity.UI.Services.IEmailSender, appdevPUPSCOUT.Services.EmailSender>();
+var emailMode = builder.Configuration["Email:Mode"] ?? "Simulated";
+if (string.Equals(emailMode, "Smtp", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddTransient<Microsoft.AspNetCore.Identity.UI.Services.IEmailSender, appdevPUPSCOUT.Services.SmtpEmailSender>();
+    builder.Services.AddTransient<appdevPUPSCOUT.Services.IAppEmailService, appdevPUPSCOUT.Services.SmtpEmailSender>();
+}
+else
+{
+    builder.Services.AddTransient<Microsoft.AspNetCore.Identity.UI.Services.IEmailSender, appdevPUPSCOUT.Services.SimulatedEmailSender>();
+    builder.Services.AddTransient<appdevPUPSCOUT.Services.IAppEmailService, appdevPUPSCOUT.Services.SimulatedEmailSender>();
+}
 builder.Services.AddScoped<appdevPUPSCOUT.Services.OtpService>();
 builder.Services.AddScoped<appdevPUPSCOUT.Services.TrackingNumberGenerator>();
 builder.Services.AddScoped<appdevPUPSCOUT.Services.TicketWorkflowService>();
 builder.Services.AddScoped<appdevPUPSCOUT.Services.RoutingService>();
 builder.Services.AddScoped<appdevPUPSCOUT.Services.PriorityService>();
 builder.Services.AddScoped<appdevPUPSCOUT.Services.AuditService>();
+builder.Services.AddScoped<appdevPUPSCOUT.Services.NotificationService>();
 builder.Services.AddHostedService<appdevPUPSCOUT.Services.SuspensionCleanupService>();
 builder.Services.AddHostedService<appdevPUPSCOUT.Services.AutoClosePendingVerificationService>();
 

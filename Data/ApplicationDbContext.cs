@@ -16,6 +16,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<TicketComment> TicketComments => Set<TicketComment>();
     public DbSet<TicketStatusHistory> TicketStatusHistories => Set<TicketStatusHistory>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<OtpCode> OtpCodes => Set<OtpCode>();
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -51,6 +52,11 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(h => h.TicketId).OnDelete(DeleteBehavior.Cascade);
         builder.Entity<TicketStatusHistory>().HasOne(h => h.ChangedBy).WithMany()
             .HasForeignKey(h => h.ChangedByUserId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Notification>().HasOne(n => n.User).WithMany()
+            .HasForeignKey(n => n.UserId).OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<Notification>().HasOne(n => n.Ticket).WithMany()
+            .HasForeignKey(n => n.TicketId).OnDelete(DeleteBehavior.Cascade);
 
         builder.Entity<Building>().HasData(new Building { Id = 1, Name = "Main Building" });
         builder.Entity<Floor>().HasData(new Floor { Id = 1, Name = "1st Floor", BuildingId = 1 });

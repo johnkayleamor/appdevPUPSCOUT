@@ -74,3 +74,63 @@ To: itpersonnel@pup.edu.ph
 Subject: New comment on ticket 134B0E5FE7AA
 A new comment was added to ticket 134B0E5FE7AA.
 ---
+To: student@pup.edu.ph
+Subject: Ticket E1A143311F57
+Ticket E1A143311F57 was assigned.
+
+View ticket: /Tickets/Details/13
+---
+To: student@pup.edu.ph
+Subject: Ticket E1A143311F57
+Ticket E1A143311F57 status changed to InProgress.
+
+View ticket: /Tickets/Details/13
+---
+To: student@pup.edu.ph
+Subject: Ticket 4A695B16FE52
+Ticket 4A695B16FE52 was assigned.
+
+View ticket: /Tickets/Details/14
+---
+To: admin@pup.edu.ph
+Subject: Ticket 4A695B16FE52
+New report 4A695B16FE52 submitted.
+
+View ticket: /Tickets/Details/14
+---
+To: student@pup.edu.ph
+Subject: Ticket E6EFE2E66ECD
+Ticket E6EFE2E66ECD was assigned.
+
+View ticket: /Tickets/Details/15
+---
+To: itpersonnel@pup.edu.ph
+Subject: Ticket E6EFE2E66ECD
+Ticket E6EFE2E66ECD was assigned to you.
+
+View ticket: /Tickets/Details/15
+---
+To: admin@pup.edu.ph
+Subject: Ticket E6EFE2E66ECD
+New report E6EFE2E66ECD submitted.
+
+View ticket: /Tickets/Details/15
+---
+To: itpersonnel@pup.edu.ph
+Subject: Ticket E6EFE2E66ECD
+Ticket E6EFE2E66ECD was assigned to you.
+
+View ticket: /Tickets/Details/15
+---
+To: teacher@pup.edu.ph
+Subject: Account suspended
+Your account has been suspended until 2026-11-29 17:02:16Z. Reason: test suspend. To appeal, contact admin@pup.edu.ph.
+---
+To: teacher@pup.edu.ph
+Subject: Account reactivated
+Your account has been reactivated. Reason: reactivated. To appeal, contact admin@pup.edu.ph.
+---
+To: teacher@pup.edu.ph
+Subject: Ticket Account
+Your account has been reactivated. Reason: reactivated.
+---

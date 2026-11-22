@@ -13,13 +13,21 @@ public class AdminController(
     RoleManager<IdentityRole> roleManager,
     ApplicationDbContext dbContext,
     Microsoft.AspNetCore.Identity.UI.Services.IEmailSender emailSender,
-    Services.AuditService auditService) : Controller
+    Services.AuditService auditService,
+    Services.TicketWorkflowService ticketWorkflowService,
+    Services.NotificationService notificationService,
+    IConfiguration configuration,
+    ILogger<AdminController> logger) : Controller
 {
     private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly RoleManager<IdentityRole> _roleManager = roleManager;
     private readonly ApplicationDbContext _dbContext = dbContext;
     private readonly Microsoft.AspNetCore.Identity.UI.Services.IEmailSender _emailSender = emailSender;
     private readonly Services.AuditService _auditService = auditService;
+    private readonly Services.TicketWorkflowService _ticketWorkflowService = ticketWorkflowService;
+    private readonly Services.NotificationService _notificationService = notificationService;
+    private readonly IConfiguration _configuration = configuration;
+    private readonly ILogger<AdminController> _logger = logger;
 
     public async Task<IActionResult> Users()
     {
@@ -74,7 +82,6 @@ public class AdminController(
 
         return RedirectToAction(nameof(Users));
     }
-
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Suspend(string userId, int days, string reason)
@@ -91,6 +98,23 @@ public class AdminController(
             return NotFound();
         }
 
+        var currentAdmin = await _userManager.GetUserAsync(User);
+        if (currentAdmin is not null && currentAdmin.Id == user.Id)
+        {
+            TempData["Error"] = "You cannot suspend your own account.";
+            return RedirectToAction(nameof(Users));
+        }
+
+        if (await _userManager.IsInRoleAsync(user, "Admin"))
+        {
+            var admins = await _userManager.GetUsersInRoleAsync("Admin");
+            if (admins.Count <= 1)
+            {
+                TempData["Error"] = "Cannot suspend the last remaining admin.";
+                return RedirectToAction(nameof(Users));
+            }
+        }
+
         if (days <= 0)
         {
             TempData["Error"] = "Suspension days must be greater than zero.";
@@ -100,14 +124,22 @@ public class AdminController(
         var until = DateTimeOffset.UtcNow.AddDays(days);
         await _userManager.SetLockoutEndDateAsync(user, until);
 
-        var adminUser = await _userManager.GetUserAsync(User);
+        var adminUser = currentAdmin;
         await _auditService.Log(adminUser?.Id, "Suspend", null, reason, user.Id, user.Email, User.Identity?.Name);
-        await _emailSender.SendEmailAsync(user.Email!, "Account suspended",
-            $"Your account has been suspended until {until:u}. Reason: {reason}. To appeal, contact admin@pup.edu.ph.");
+
+        var appealContact = _configuration["Support:AppealContact"] ?? "admin@pup.edu.ph";
+        try
+        {
+            await _emailSender.SendEmailAsync(user.Email!, "Account suspended",
+                $"Your account has been suspended until {until:u}. Reason: {reason}. To appeal, contact {appealContact}.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send suspension email.");
+        }
 
         return RedirectToAction(nameof(Users));
     }
-
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Deactivate(string userId, string reason)
@@ -124,14 +156,40 @@ public class AdminController(
             return NotFound();
         }
 
+        var currentAdmin = await _userManager.GetUserAsync(User);
+        if (currentAdmin is not null && currentAdmin.Id == user.Id)
+        {
+            TempData["Error"] = "You cannot deactivate your own account.";
+            return RedirectToAction(nameof(Users));
+        }
+
+        if (await _userManager.IsInRoleAsync(user, "Admin"))
+        {
+            var admins = await _userManager.GetUsersInRoleAsync("Admin");
+            if (admins.Count <= 1)
+            {
+                TempData["Error"] = "Cannot deactivate the last remaining admin.";
+                return RedirectToAction(nameof(Users));
+            }
+        }
+
         user.IsDeactivated = true;
         await _userManager.UpdateAsync(user);
         await _userManager.SetLockoutEndDateAsync(user, DateTimeOffset.MaxValue);
 
-        var adminUser = await _userManager.GetUserAsync(User);
+        var adminUser = currentAdmin;
         await _auditService.Log(adminUser?.Id, "Deactivate", null, reason, user.Id, user.Email, User.Identity?.Name);
-        await _emailSender.SendEmailAsync(user.Email!, "Account deactivated",
-            $"Your account has been deactivated. Reason: {reason}. To appeal, contact admin@pup.edu.ph.");
+
+        var appealContact = _configuration["Support:AppealContact"] ?? "admin@pup.edu.ph";
+        try
+        {
+            await _emailSender.SendEmailAsync(user.Email!, "Account deactivated",
+                $"Your account has been deactivated. Reason: {reason}. To appeal, contact {appealContact}.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send deactivation email.");
+        }
 
         return RedirectToAction(nameof(Users));
     }
@@ -244,6 +302,8 @@ public class AdminController(
         await _auditService.Log(admin?.Id, "Assign", ticket.Id,
             $"Ticket {ticket.TrackingNumber} reassigned from {previousAssigneeId ?? "unassigned"} to {assignee?.Email ?? "unassigned"}.",
             ticket.ReporterId, null, User.Identity?.Name);
+
+        await _ticketWorkflowService.NotifyAssignmentAsync(ticket, assignee, previousAssigneeId, admin?.Id);
 
         TempData["Message"] = "Ticket assignment updated.";
         return RedirectToAction(nameof(Tickets));
@@ -683,8 +743,28 @@ public class AdminController(
 
         var adminUser = await _userManager.GetUserAsync(User);
         await _auditService.Log(adminUser?.Id, "Reactivate", null, reason, user.Id, user.Email, User.Identity?.Name);
-        await _emailSender.SendEmailAsync(user.Email!, "Account reactivated",
-            $"Your account has been reactivated. Reason: {reason}.");
+
+        var appealContact = _configuration["Support:AppealContact"] ?? "admin@pup.edu.ph";
+        try
+        {
+            await _emailSender.SendEmailAsync(user.Email!, "Account reactivated",
+                $"Your account has been reactivated. Reason: {reason}. To appeal, contact {appealContact}.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send reactivation email.");
+        }
+
+        // In-app notification since the user can log in again.
+        try
+        {
+            await _notificationService.NotifyAsync(user.Id, null, "Account",
+                $"Your account has been reactivated. Reason: {reason}.", null, false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create reactivation notification.");
+        }
 
         return RedirectToAction(nameof(Users));
     }

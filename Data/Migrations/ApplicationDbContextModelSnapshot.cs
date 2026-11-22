@@ -337,6 +337,41 @@ namespace appdevPUPSCOUT.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("appdevPUPSCOUT.Models.Notification", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Link")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("TicketId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TicketId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Notifications");
+                });
+
             modelBuilder.Entity("appdevPUPSCOUT.Models.OtpCode", b =>
                 {
                     b.Property<int>("Id")
@@ -650,6 +685,24 @@ namespace appdevPUPSCOUT.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Building");
+                });
+
+            modelBuilder.Entity("appdevPUPSCOUT.Models.Notification", b =>
+                {
+                    b.HasOne("appdevPUPSCOUT.Models.Ticket", "Ticket")
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("appdevPUPSCOUT.Models.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Ticket");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("appdevPUPSCOUT.Models.Room", b =>

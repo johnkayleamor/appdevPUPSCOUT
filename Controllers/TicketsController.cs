@@ -15,7 +15,8 @@ public class TicketsController(
     IWebHostEnvironment environment,
     Services.TicketWorkflowService ticketWorkflowService,
     Microsoft.AspNetCore.Identity.UI.Services.IEmailSender emailSender,
-    Services.AuditService auditService) : Controller
+    Services.AuditService auditService,
+    Services.NotificationService notificationService) : Controller
 {
     private readonly ApplicationDbContext _dbContext = dbContext;
     private readonly UserManager<ApplicationUser> _userManager = userManager;
@@ -23,6 +24,7 @@ public class TicketsController(
     private readonly Services.TicketWorkflowService _ticketWorkflowService = ticketWorkflowService;
     private readonly Microsoft.AspNetCore.Identity.UI.Services.IEmailSender _emailSender = emailSender;
     private readonly Services.AuditService _auditService = auditService;
+    private readonly Services.NotificationService _notificationService = notificationService;
 
     public IActionResult Create(int? buildingId, int? floorId, int? roomId)
     {
@@ -364,46 +366,16 @@ public class TicketsController(
             return Forbid();
         }
 
-        if (ticket.Status == TicketStatus.Closed || ticket.Status == TicketStatus.InvalidSpam)
+        var result = await _ticketWorkflowService.AddCommentAsync(id, user.Id, content ?? string.Empty);
+        if (!result.Success)
         {
-            TempData["Error"] = "Comments are read-only for this ticket.";
-            return RedirectToAction(nameof(Details), new { id });
+            TempData["Error"] = result.Error;
+        }
+        else
+        {
+            TempData["Message"] = "Comment added.";
         }
 
-        if (string.IsNullOrWhiteSpace(content) || content.Trim().Length > 2000)
-        {
-            TempData["Error"] = "A comment is required and must be 2000 characters or fewer.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
-
-        var roles = await _userManager.GetRolesAsync(user);
-        _dbContext.TicketComments.Add(new TicketComment
-        {
-            TicketId = ticket.Id,
-            AuthorId = user.Id,
-            AuthorRole = roles.FirstOrDefault() ?? "User",
-            Content = content.Trim(),
-            CreatedAt = DateTime.UtcNow
-        });
-
-        await _dbContext.SaveChangesAsync();
-
-        var recipients = new HashSet<string>();
-        if (ticket.ReporterId != user.Id) recipients.Add(ticket.ReporterId);
-        if (!string.IsNullOrWhiteSpace(ticket.AssigneeId) && ticket.AssigneeId != user.Id) recipients.Add(ticket.AssigneeId!);
-
-        foreach (var recipientId in recipients)
-        {
-            var recipient = await _userManager.FindByIdAsync(recipientId);
-            if (recipient?.Email is not null)
-            {
-                await _emailSender.SendEmailAsync(recipient.Email,
-                    $"New comment on ticket {ticket.TrackingNumber}",
-                    $"A new comment was added to ticket {ticket.TrackingNumber}.");
-            }
-        }
-
-        TempData["Message"] = "Comment added.";
         return RedirectToAction(nameof(Details), new { id });
     }
 

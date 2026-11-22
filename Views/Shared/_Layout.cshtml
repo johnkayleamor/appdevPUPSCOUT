@@ -1,4 +1,6 @@
-﻿<!DOCTYPE html>
+﻿@inject appdevPUPSCOUT.Data.ApplicationDbContext DbContext
+@using System.Security.Claims
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
@@ -36,6 +38,26 @@
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link text-dark" asp-area="" asp-controller="Tickets" asp-action="MyReports">My Reports</a>
+                            </li>
+                            <li class="nav-item">
+                                @{
+                                    var unreadCount = 0;
+                                    if (User.Identity?.IsAuthenticated == true)
+                                    {
+                                        var uid = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                                        if (uid is not null)
+                                        {
+                                            unreadCount = DbContext.Notifications.Count(n => n.UserId == uid && !n.IsRead);
+                                        }
+                                    }
+                                }
+                                <a class="nav-link text-dark" asp-area="" asp-controller="Notifications" asp-action="Index">
+                                    Notifications
+                                    @if (unreadCount > 0)
+                                    {
+                                        <span class="badge bg-danger">@unreadCount</span>
+                                    }
+                                </a>
                             </li>
                             @if (User.IsInRole("ITPersonnel") || User.IsInRole("MaintenancePersonnel") || User.IsInRole("Admin"))
                             {
