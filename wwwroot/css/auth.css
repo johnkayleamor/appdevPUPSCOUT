@@ -1,0 +1,292 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', sans-serif;
+}
+
+body {
+    min-height: 100vh;
+    display: flex;
+    background-color: #FAF6F0;
+}
+
+.left-panel {
+    flex: 1;
+    background-color: #7A0000;
+    color: #FFFFFF;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    padding: 40px 24px;
+    text-align: center;
+}
+
+.brand-center {
+    margin: auto 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.pup-logo {
+    width: 210px;
+    height: 210px;
+    object-fit: cover;
+    border-radius: 50%;
+    margin-bottom: 24px;
+}
+
+.brand-title {
+    font-size: 2.2rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+}
+
+.brand-subtitle {
+    font-size: 0.95rem;
+    color: #F3E8E8;
+    font-weight: 400;
+}
+
+.campus-footer {
+    font-size: 0.75rem;
+    color: #E0D0D0;
+}
+
+.right-panel {
+    flex: 1;
+    background-color: #FAF6F0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+}
+
+.login-card {
+    background-color: #FFFFFF;
+    width: 100%;
+    max-width: 420px;
+    padding: 32px 28px;
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+.auth-tabs {
+    display: flex;
+    background-color: #F2ECE4;
+    border-radius: 999px;
+    padding: 4px;
+    margin-bottom: 24px;
+}
+
+.auth-tab {
+    flex: 1;
+    text-align: center;
+    padding: 10px 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: 999px;
+    text-decoration: none;
+    color: #555555;
+    transition: 0.2s;
+}
+
+.auth-tab.active {
+    background-color: #7A0000;
+    color: #FFFFFF;
+}
+
+.card-heading {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1E1E1E;
+    margin-bottom: 20px;
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #333333;
+    margin-bottom: 6px;
+}
+
+.input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.form-control {
+    width: 100%;
+    padding: 11px 14px;
+    font-size: 0.85rem;
+    border: 1px solid #DCDCDC;
+    border-radius: 8px;
+    outline: none;
+    color: #222222;
+    background-color: #FFFFFF;
+}
+
+.form-control:focus {
+    border-color: #7A0000;
+}
+
+.toggle-password {
+    position: absolute;
+    right: 12px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #666666;
+    display: flex;
+    align-items: center;
+    padding: 0;
+}
+
+.custom-select-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.custom-select-trigger {
+    width: 100%;
+    padding: 11px 14px;
+    font-size: 0.85rem;
+    border: 1px solid #DCDCDC;
+    border-radius: 8px;
+    background-color: #FFFFFF;
+    color: #757575;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+}
+
+.custom-select-trigger.has-value {
+    color: #222222;
+}
+
+.custom-select-wrapper.open .custom-select-trigger {
+    border-color: #7A0000;
+}
+
+.chevron-icon {
+    transition: transform 0.2s ease;
+}
+
+.custom-select-wrapper.open .chevron-icon {
+    transform: rotate(180deg);
+}
+
+.custom-options {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background-color: #FFFFFF;
+    border: 1px solid #E5E5E5;
+    border-radius: 10px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+    z-index: 99;
+    display: none;
+    overflow: hidden;
+    padding: 6px 0;
+}
+
+.custom-select-wrapper.open .custom-options {
+    display: block;
+}
+
+.custom-option {
+    padding: 10px 16px;
+    font-size: 0.85rem;
+    color: #222222;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.custom-option:hover,
+.custom-option.selected {
+    background-color: #FAF6F0;
+    color: #7A0000;
+    font-weight: 500;
+}
+
+.btn-submit {
+    width: 100%;
+    padding: 12px;
+    margin-top: 8px;
+    background-color: #7A0000;
+    color: #FFFFFF;
+    font-size: 0.9rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn-submit:hover {
+    background-color: #5E0000;
+}
+
+/* ---------- Validation messages (added) ---------- */
+.field-error {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.75rem;
+    color: #B42318;
+}
+
+.field-error:empty {
+    display: none;
+}
+
+.form-control.is-invalid,
+.custom-select-trigger.is-invalid {
+    border-color: #B42318;
+}
+
+.validation-summary-errors {
+    margin-bottom: 16px;
+    font-size: 0.8rem;
+    color: #B42318;
+}
+
+.validation-summary-errors ul {
+    list-style: none;
+}
+
+/* Responsive Mobile Layout */
+@media (max-width: 768px) {
+    body {
+        flex-direction: column;
+    }
+
+    .left-panel {
+        padding: 32px 20px;
+    }
+
+    .pup-logo {
+        width: 120px;
+        height: 120px;
+        margin-bottom: 14px;
+    }
+
+    .brand-title {
+        font-size: 1.6rem;
+    }
+
+    .campus-footer {
+        margin-top: 16px;
+    }
+}

@@ -1,0 +1,97 @@
+@page
+@model LoginModel
+@{
+    Layout = null;
+    ViewData["Title"] = "PUPSCOUT - Log In";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"]</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="~/css/auth.css" asp-append-version="true" />
+</head>
+<body>
+
+    <!-- Left Maroon Branding Section -->
+    <div class="left-panel">
+        <div class="brand-center">
+            <img src="~/images/pupscout-logo.png" alt="PUPSCOUT Logo" class="pup-logo" />
+            <h1 class="brand-title">PUPSCOUT</h1>
+            <p class="brand-subtitle">PUP System for Campus Operations and Utility Tracker</p>
+        </div>
+        <p class="campus-footer">PUP A. Mabini Campus, Anonas Street, Sta. Mesa, Manila</p>
+    </div>
+
+    <!-- Right Form Section -->
+    <div class="right-panel">
+        <div class="login-card">
+
+            <div class="auth-tabs">
+                <a href="#" class="auth-tab active">Log In</a>
+                <a asp-area="Identity" asp-page="/Account/Register" class="auth-tab">Create Account</a>
+            </div>
+
+            <h2 class="card-heading">Welcome back!</h2>
+
+            <form method="post" asp-route-returnUrl="@Model.ReturnUrl">
+                <div asp-validation-summary="ModelOnly" role="alert"></div>
+
+                <div class="form-group">
+                    <label class="form-label" for="webmail">PUP Webmail</label>
+                    <input type="email" id="webmail" name="Input.Email" value="@Model.Input.Email" class="form-control"
+                           placeholder="Enter your PUP webmail" required />
+                    <span asp-validation-for="Input.Email" class="field-error"></span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="password">Password</label>
+                    <div class="input-wrapper">
+                        <input type="password" id="password" name="Input.Password" class="form-control"
+                               placeholder="Enter your password" style="padding-right: 38px;" required />
+                        <button type="button" class="toggle-password" onclick="togglePass()"
+                                aria-label="Toggle password visibility">
+                            <svg id="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                 stroke="#666666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                        </button>
+                    </div>
+                    <span asp-validation-for="Input.Password" class="field-error"></span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Select Role</label>
+                    <input type="hidden" id="role-input" name="Input.Role" value="@Model.Input.Role" />
+
+                    <div class="custom-select-wrapper" id="role-dropdown">
+                        <div class="custom-select-trigger @(string.IsNullOrEmpty(Model.Input.Role) ? "" : "has-value")" onclick="toggleDropdown()">
+                            <span id="role-selected-text">@(string.IsNullOrEmpty(Model.Input.Role) ? "Select Role" : Model.Input.Role)</span>
+                            <svg class="chevron-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                 stroke="#666666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </div>
+
+                        <div class="custom-options">
+                            <div class="custom-option" onclick="selectRole('Student', this)">Student</div>
+                            <div class="custom-option" onclick="selectRole('Teacher', this)">Teacher</div>
+                            <div class="custom-option" onclick="selectRole('IT Equipment Personnel', this)">IT Equipment Personnel</div>
+                            <div class="custom-option" onclick="selectRole('Maintenance Personnel', this)">Maintenance Personnel</div>
+                            <div class="custom-option" onclick="selectRole('Administrator', this)">Administrator</div>
+                        </div>
+                    </div>
+                    <span asp-validation-for="Input.Role" class="field-error"></span>
+                </div>
+
+                <button type="submit" class="btn-submit">Log In</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="~/js/auth.js" asp-append-version="true"></script>
+</body>
+</html>
