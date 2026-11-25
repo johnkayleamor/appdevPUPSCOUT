@@ -16,7 +16,8 @@ public class TicketsController(
     Services.TicketWorkflowService ticketWorkflowService,
     Microsoft.AspNetCore.Identity.UI.Services.IEmailSender emailSender,
     Services.AuditService auditService,
-    Services.NotificationService notificationService) : Controller
+    Services.NotificationService notificationService,
+    Services.LookupCacheService lookupCacheService) : Controller
 {
     private readonly ApplicationDbContext _dbContext = dbContext;
     private readonly UserManager<ApplicationUser> _userManager = userManager;
@@ -25,19 +26,21 @@ public class TicketsController(
     private readonly Microsoft.AspNetCore.Identity.UI.Services.IEmailSender _emailSender = emailSender;
     private readonly Services.AuditService _auditService = auditService;
     private readonly Services.NotificationService _notificationService = notificationService;
+    private readonly Services.LookupCacheService _lookupCacheService = lookupCacheService;
 
-    public IActionResult Create(int? buildingId, int? floorId, int? roomId)
+    public IActionResult Create(int? buildingId, int? floorId, int? roomId, string? source)
     {
         var model = new TicketCreateViewModel
         {
             BuildingId = buildingId ?? 0,
             FloorId = floorId ?? 0,
-            RoomId = roomId ?? 0
+            RoomId = roomId ?? 0,
+            Source = NormalizeSource(source)
         };
-        ViewBag.Buildings = _dbContext.Buildings.OrderBy(b => b.Name).ToList();
-        ViewBag.Floors = _dbContext.Floors.Include(f => f.Building).OrderBy(f => f.Name).ToList();
-        ViewBag.Rooms = _dbContext.Rooms.Include(r => r.Floor).ThenInclude(f => f!.Building).Where(r => r.IsActive).OrderBy(r => r.Name).ToList();
-        ViewBag.Equipment = _dbContext.Equipment.Include(e => e.Room).ThenInclude(r => r!.Floor).ThenInclude(f => f!.Building).Where(e => e.Room != null && e.Room!.IsActive).OrderBy(e => e.Name).ToList();
+        ViewBag.Buildings = _lookupCacheService.GetBuildings();
+        ViewBag.Floors = _lookupCacheService.GetFloors();
+        ViewBag.Rooms = _lookupCacheService.GetRooms().Where(r => r.IsActive).OrderBy(r => r.Name).ToList();
+        ViewBag.Equipment = _lookupCacheService.GetEquipment().Where(e => e.Room != null && e.Room!.IsActive).OrderBy(e => e.Name).ToList();
         return View(model);
     }
 
@@ -104,7 +107,7 @@ public class TicketsController(
 
     public async Task<IActionResult> Map(int? buildingId, int? floorId)
     {
-        var buildings = _dbContext.Buildings.OrderBy(b => b.Name).ToList();
+        var buildings = _lookupCacheService.GetBuildings();
         if (!buildings.Any())
         {
             ViewBag.Buildings = buildings;
@@ -120,11 +123,11 @@ public class TicketsController(
         }
 
         var selectedBuildingId = buildingId ?? buildings.First().Id;
-        var floors = _dbContext.Floors.Where(f => f.BuildingId == selectedBuildingId).OrderBy(f => f.Name).ToList();
+        var floors = _lookupCacheService.GetFloors().Where(f => f.BuildingId == selectedBuildingId).OrderBy(f => f.Name).ToList();
         if (!floors.Any())
         {
             ViewBag.Buildings = buildings;
-            ViewBag.Floors = _dbContext.Floors.Include(f => f.Building).OrderBy(f => f.Name).ToList();
+            ViewBag.Floors = _lookupCacheService.GetFloors();
             ViewBag.SelectedBuildingId = selectedBuildingId;
             ViewBag.SelectedFloorId = 0;
             ViewBag.Rooms = new List<Room>();
@@ -141,7 +144,7 @@ public class TicketsController(
             selectedFloorId = floors.First().Id;
         }
 
-        var rooms = _dbContext.Rooms
+        var rooms = _lookupCacheService.GetRooms()
             .Where(r => r.FloorId == selectedFloorId)
             .OrderBy(r => r.Name)
             .ToList();
@@ -173,7 +176,7 @@ public class TicketsController(
             }
         }
 
-        var equipmentByRoom = rooms.ToDictionary(r => r.Id, r => _dbContext.Equipment.Where(e => e.RoomId == r.Id).OrderBy(e => e.Name).ToList());
+        var equipmentByRoom = rooms.ToDictionary(r => r.Id, r => _lookupCacheService.GetEquipment().Where(e => e.RoomId == r.Id).OrderBy(e => e.Name).ToList());
         var openEquipmentIds = new HashSet<int>(openTickets.Select(t => t.EquipmentId));
 
         var roomData = rooms.Select(r => new
@@ -190,7 +193,7 @@ public class TicketsController(
         }).ToList();
 
         ViewBag.Buildings = buildings;
-        ViewBag.Floors = _dbContext.Floors.Include(f => f.Building).OrderBy(f => f.Name).ToList();
+        ViewBag.Floors = _lookupCacheService.GetFloors();
         ViewBag.SelectedBuildingId = selectedBuildingId;
         ViewBag.SelectedFloorId = selectedFloorId;
         ViewBag.Rooms = rooms;
@@ -404,6 +407,11 @@ public class TicketsController(
         return RedirectToAction(nameof(Details), new { id });
     }
 
+    private static string NormalizeSource(string? source)
+    {
+        return string.Equals(source, "Map", StringComparison.OrdinalIgnoreCase) ? "Map" : "List";
+    }
+
     private bool CanAccessTicket(Ticket ticket, ApplicationUser user)
     {
         if (User.IsInRole("Admin")) return true;
@@ -521,10 +529,10 @@ public class TicketsController(
 
         if (!ModelState.IsValid)
         {
-            ViewBag.Buildings = _dbContext.Buildings.OrderBy(b => b.Name).ToList();
-            ViewBag.Floors = _dbContext.Floors.Include(f => f.Building).OrderBy(f => f.Name).ToList();
-            ViewBag.Rooms = _dbContext.Rooms.Include(r => r.Floor).ThenInclude(f => f!.Building).Where(r => r.IsActive).OrderBy(r => r.Name).ToList();
-            ViewBag.Equipment = _dbContext.Equipment.Include(e => e.Room).ThenInclude(r => r!.Floor).ThenInclude(f => f!.Building).Where(e => e.Room != null && e.Room!.IsActive).OrderBy(e => e.Name).ToList();
+            ViewBag.Buildings = _lookupCacheService.GetBuildings();
+            ViewBag.Floors = _lookupCacheService.GetFloors();
+            ViewBag.Rooms = _lookupCacheService.GetRooms().Where(r => r.IsActive).OrderBy(r => r.Name).ToList();
+            ViewBag.Equipment = _lookupCacheService.GetEquipment().Where(e => e.Room != null && e.Room!.IsActive).OrderBy(e => e.Name).ToList();
             return View(model);
         }
 

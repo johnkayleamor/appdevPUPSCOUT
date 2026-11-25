@@ -109,7 +109,8 @@
                 ul.appendChild(li);
             });
             document.getElementById('viewTicketBtn').href = '/Tickets/MyReports';
-            document.getElementById('reportBtn').href = '/Tickets/Create?buildingId=' + selectedBuildingId + '&floorId=' + selectedFloorId + '&roomId=' + roomId;
+            document.getElementById('reportBtn').href = '/Tickets/Create?buildingId=' + selectedBuildingId + '&floorId=' + selectedFloorId + '&roomId=' + roomId + '&source=Map';
+
             const panel = document.getElementById('roomPanel');
             panel.style.display = 'block';
             requestAnimationFrame(() => panel.classList.add('open'));

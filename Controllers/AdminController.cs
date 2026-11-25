@@ -16,6 +16,7 @@ public class AdminController(
     Services.AuditService auditService,
     Services.TicketWorkflowService ticketWorkflowService,
     Services.NotificationService notificationService,
+    Services.LookupCacheService lookupCacheService,
     IConfiguration configuration,
     ILogger<AdminController> logger) : Controller
 {
@@ -26,6 +27,7 @@ public class AdminController(
     private readonly Services.AuditService _auditService = auditService;
     private readonly Services.TicketWorkflowService _ticketWorkflowService = ticketWorkflowService;
     private readonly Services.NotificationService _notificationService = notificationService;
+    private readonly Services.LookupCacheService _lookupCacheService = lookupCacheService;
     private readonly IConfiguration _configuration = configuration;
     private readonly ILogger<AdminController> _logger = logger;
 
@@ -194,7 +196,7 @@ public class AdminController(
         return RedirectToAction(nameof(Users));
     }
 
-    public async Task<IActionResult> Tickets(string? status, string? priority, string? category, string? assigneeId, DateTime? from, DateTime? to, string? search, int page = 1)
+    public async Task<IActionResult> Tickets(string? status, string? priority, string? category, string? assigneeId, DateTime? from, DateTime? to, string? search, string? sort, int page = 1)
     {
         const int pageSize = 20;
 
@@ -243,10 +245,17 @@ public class AdminController(
                 (t.Room != null && t.Room.Name.Contains(search)));
         }
 
-        query = query
-            .OrderBy(t => t.AssigneeId != null)
-            .ThenByDescending(t => t.Priority)
-            .ThenByDescending(t => t.CreatedAt);
+        if (string.Equals(sort, "date", StringComparison.OrdinalIgnoreCase))
+        {
+            query = query.OrderByDescending(t => t.CreatedAt);
+        }
+        else
+        {
+            query = query
+                .OrderBy(t => t.AssigneeId != null)
+                .ThenByDescending(t => t.Priority)
+                .ThenByDescending(t => t.CreatedAt);
+        }
 
         var total = await query.CountAsync();
         var tickets = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
@@ -270,6 +279,7 @@ public class AdminController(
         ViewBag.From = from;
         ViewBag.To = to;
         ViewBag.Search = search;
+        ViewBag.Sort = sort;
 
         return View(tickets);
     }
@@ -313,14 +323,16 @@ public class AdminController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ChangePriority(int id, TicketPriority priority)
     {
-        var ticket = await _dbContext.Tickets.FindAsync(id);
-        if (ticket is null) return NotFound();
-
-        ticket.Priority = priority;
         var admin = await _userManager.GetUserAsync(User);
-        await _auditService.Log(admin?.Id, "ChangePriority", ticket.Id,
-            $"Ticket {ticket.TrackingNumber} priority changed to {priority}.", ticket.ReporterId, null, User.Identity?.Name);
-        TempData["Message"] = "Priority updated.";
+        var result = await _ticketWorkflowService.ChangePriorityAsync(id, priority, admin?.Id ?? string.Empty, User.IsInRole("Admin"), User.Identity?.Name);
+        if (!result.Success)
+        {
+            TempData["Error"] = result.Error;
+        }
+        else
+        {
+            TempData["Message"] = "Priority updated.";
+        }
         return RedirectToAction(nameof(Tickets));
     }
 
@@ -344,6 +356,257 @@ public class AdminController(
             $"Ticket {ticket.TrackingNumber} marked invalid/spam.", ticket.ReporterId, null, User.Identity?.Name);
         TempData["Message"] = "Ticket marked invalid/spam.";
         return RedirectToAction(nameof(Tickets));
+    }
+
+    public async Task<IActionResult> HeatMap(int? buildingId, int? floorId, string? period, DateTime? from, DateTime? to)
+    {
+        var buildings = _lookupCacheService.GetBuildings();
+        var floors = _lookupCacheService.GetFloors();
+
+        int selectedBuildingId = buildingId ?? (buildings.FirstOrDefault()?.Id ?? 0);
+        var buildingFloors = floors.Where(f => f.BuildingId == selectedBuildingId).OrderBy(f => f.Name).ToList();
+        int selectedFloorId = floorId ?? (buildingFloors.FirstOrDefault()?.Id ?? 0);
+        if (buildingFloors.Any() && !buildingFloors.Any(f => f.Id == selectedFloorId))
+        {
+            selectedFloorId = buildingFloors.First().Id;
+        }
+
+        var rooms = _lookupCacheService.GetRooms()
+            .Where(r => r.FloorId == selectedFloorId)
+            .OrderBy(r => r.Name)
+            .ToList();
+
+        var (start, end) = ResolvePeriod(period, from, to);
+
+        // One grouped query per floor.
+        var countRows = await _dbContext.Tickets
+            .AsNoTracking()
+            .Where(t => t.Room != null && t.Room.FloorId == selectedFloorId)
+            .Where(t => t.Status != TicketStatus.InvalidSpam)
+            .Where(t => t.CreatedAt >= start && t.CreatedAt <= end)
+            .GroupBy(t => t.RoomId)
+            .Select(g => new { RoomId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var counts = rooms.ToDictionary(r => r.Id, r => 0);
+        foreach (var row in countRows)
+        {
+            if (counts.ContainsKey(row.RoomId))
+            {
+                counts[row.RoomId] = row.Count;
+            }
+        }
+
+        var roomData = rooms.Select(r => new
+        {
+            id = r.Id,
+            name = r.Name,
+            count = counts[r.Id],
+            historyUrl = Url.Action("RoomHistory", "Admin", new { id = r.Id })
+        }).ToList();
+
+        ViewBag.Buildings = buildings;
+        ViewBag.Floors = floors;
+        ViewBag.Rooms = rooms;
+        ViewBag.SelectedBuildingId = selectedBuildingId;
+        ViewBag.SelectedFloorId = selectedFloorId;
+        ViewBag.Period = period ?? "30";
+        ViewBag.From = start;
+        ViewBag.To = end;
+        ViewBag.Counts = counts;
+        ViewBag.RoomDataJson = System.Text.Json.JsonSerializer.Serialize(roomData);
+
+        return View();
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> HeatMapCounts(int floorId, string? period, DateTime? from, DateTime? to)
+    {
+        var (start, end) = ResolvePeriod(period, from, to);
+
+        var counts = await _dbContext.Tickets
+            .AsNoTracking()
+            .Where(t => t.Room != null && t.Room.FloorId == floorId)
+            .Where(t => t.Status != TicketStatus.InvalidSpam)
+            .Where(t => t.CreatedAt >= start && t.CreatedAt <= end)
+            .GroupBy(t => t.RoomId)
+            .Select(g => new { roomId = g.Key, count = g.Count() })
+            .ToListAsync();
+
+        return Json(counts);
+    }
+
+    private static (DateTime Start, DateTime End) ResolvePeriod(string? period, DateTime? from, DateTime? to)
+    {
+        var now = DateTime.UtcNow;
+
+        if (string.Equals(period, "custom", StringComparison.OrdinalIgnoreCase) && from.HasValue && to.HasValue)
+        {
+            var start = from.Value.Date;
+            var end = to.Value.Date.AddDays(1).AddTicks(-1);
+            if (end < start)
+            {
+                end = start;
+            }
+            return (start, end);
+        }
+
+        if (string.Equals(period, "semester", StringComparison.OrdinalIgnoreCase))
+        {
+            int year = now.Year;
+            if (now.Month >= 8)
+            {
+                return (new DateTime(year, 8, 1), new DateTime(year, 12, 31, 23, 59, 59));
+            }
+            if (now.Month >= 6)
+            {
+                return (new DateTime(year, 6, 1), new DateTime(year, 7, 31, 23, 59, 59));
+            }
+            return (new DateTime(year, 1, 1), new DateTime(year, 5, 31, 23, 59, 59));
+        }
+
+        // Default: last 30 days.
+        return (now.AddDays(-30), now);
+    }
+
+    public async Task<IActionResult> Resolution(DateTime? from, DateTime? to)
+    {
+        var start = (from ?? DateTime.UtcNow.AddDays(-30)).Date;
+        var end = (to ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1);
+
+        var baseQuery = _dbContext.Tickets.AsNoTracking()
+            .Where(t => t.CreatedAt >= start && t.CreatedAt <= end && t.Status != TicketStatus.InvalidSpam);
+
+        // Overall averages.
+        var completionCount = await baseQuery.CountAsync(t => t.VerificationStartedAt != null);
+        double? completionAvg = null;
+        if (completionCount > 0)
+        {
+            completionAvg = await _dbContext.Database.SqlQueryRaw<double?>(
+                "SELECT AVG((julianday(VerificationStartedAt) - julianday(CreatedAt)) * 24.0) AS Value FROM Tickets WHERE CreatedAt >= @s AND CreatedAt <= @e AND Status <> @invalid AND VerificationStartedAt IS NOT NULL",
+                new Microsoft.Data.Sqlite.SqliteParameter("@s", start),
+                new Microsoft.Data.Sqlite.SqliteParameter("@e", end),
+                new Microsoft.Data.Sqlite.SqliteParameter("@invalid", (int)TicketStatus.InvalidSpam))
+                .FirstOrDefaultAsync();
+        }
+
+        var closedCount = await baseQuery.CountAsync(t => t.ClosedAt != null);
+        double? closedAvg = null;
+        if (closedCount > 0)
+        {
+            closedAvg = await _dbContext.Database.SqlQueryRaw<double?>(
+                "SELECT AVG((julianday(ClosedAt) - julianday(CreatedAt)) * 24.0) AS Value FROM Tickets WHERE CreatedAt >= @s AND CreatedAt <= @e AND Status <> @invalid AND ClosedAt IS NOT NULL",
+                new Microsoft.Data.Sqlite.SqliteParameter("@s", start),
+                new Microsoft.Data.Sqlite.SqliteParameter("@e", end),
+                new Microsoft.Data.Sqlite.SqliteParameter("@invalid", (int)TicketStatus.InvalidSpam))
+                .FirstOrDefaultAsync();
+        }
+
+        // Per category.
+        var categoryRows = new List<object>();
+        var categoryLabels = new List<string>();
+        var categoryCompletionAvgs = new List<double?>();
+        foreach (var category in Enum.GetValues<TicketCategory>())
+        {
+            var catQuery = baseQuery.Where(t => t.Category == category);
+            var catCompletionCount = await catQuery.CountAsync(t => t.VerificationStartedAt != null);
+            double? catCompletionAvg = null;
+            if (catCompletionCount > 0)
+            {
+                catCompletionAvg = await _dbContext.Database.SqlQueryRaw<double?>(
+                    "SELECT AVG((julianday(VerificationStartedAt) - julianday(CreatedAt)) * 24.0) AS Value FROM Tickets WHERE CreatedAt >= @s AND CreatedAt <= @e AND Status <> @invalid AND Category = @cat AND VerificationStartedAt IS NOT NULL",
+                    new Microsoft.Data.Sqlite.SqliteParameter("@s", start),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@e", end),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@invalid", (int)TicketStatus.InvalidSpam),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@cat", (int)category))
+                    .FirstOrDefaultAsync();
+            }
+            var catClosedCount = await catQuery.CountAsync(t => t.ClosedAt != null);
+            double? catClosedAvg = null;
+            if (catClosedCount > 0)
+            {
+                catClosedAvg = await _dbContext.Database.SqlQueryRaw<double?>(
+                    "SELECT AVG((julianday(ClosedAt) - julianday(CreatedAt)) * 24.0) AS Value FROM Tickets WHERE CreatedAt >= @s AND CreatedAt <= @e AND Status <> @invalid AND Category = @cat AND ClosedAt IS NOT NULL",
+                    new Microsoft.Data.Sqlite.SqliteParameter("@s", start),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@e", end),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@invalid", (int)TicketStatus.InvalidSpam),
+                    new Microsoft.Data.Sqlite.SqliteParameter("@cat", (int)category))
+                    .FirstOrDefaultAsync();
+            }
+            var catTotal = await catQuery.CountAsync();
+            categoryRows.Add(new
+            {
+                Category = category.ToString(),
+                Total = catTotal,
+                CompletionCount = catCompletionCount,
+                CompletionAvg = catCompletionAvg,
+                ClosedCount = catClosedCount,
+                ClosedAvg = catClosedAvg
+            });
+            categoryLabels.Add(category.ToString());
+            categoryCompletionAvgs.Add(catCompletionAvg ?? 0);
+        }
+
+        // Staff workload: include IT and maintenance staff with zero tickets.
+        var staff = new List<ApplicationUser>();
+        foreach (var role in new[] { "ITPersonnel", "MaintenancePersonnel" })
+        {
+            staff.AddRange(await _userManager.GetUsersInRoleAsync(role));
+        }
+        staff = staff.DistinctBy(u => u.Id).OrderBy(u => u.Email).ToList();
+
+        var openCounts = await baseQuery
+            .Where(t => t.Status != TicketStatus.Closed)
+            .GroupBy(t => t.AssigneeId)
+            .Select(g => new { AssigneeId = g.Key, Count = g.Count() })
+            .ToListAsync();
+        var closedCounts = await _dbContext.Tickets.AsNoTracking()
+            .Where(t => t.CreatedAt >= start && t.CreatedAt <= end && t.Status == TicketStatus.Closed)
+            .GroupBy(t => t.AssigneeId)
+            .Select(g => new { AssigneeId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var staffRoles = new Dictionary<string, string?>();
+        foreach (var s in staff)
+        {
+            var roles = await _userManager.GetRolesAsync(s);
+            staffRoles[s.Id] = roles.FirstOrDefault();
+        }
+
+        var workloadRows = staff.Select(s => new
+        {
+            Email = s.Email,
+            Role = staffRoles[s.Id],
+            Open = openCounts.FirstOrDefault(x => x.AssigneeId == s.Id)?.Count ?? 0,
+            Closed = closedCounts.FirstOrDefault(x => x.AssigneeId == s.Id)?.Count ?? 0
+        }).ToList();
+
+        // Source comparison.
+        var sourceRows = await baseQuery
+            .GroupBy(t => t.Source)
+            .Select(g => new { Source = g.Key, Count = g.Count() })
+            .ToListAsync();
+        var totalSource = sourceRows.Sum(x => x.Count);
+        var sourceLabels = sourceRows.Select(x => x.Source).ToList();
+        var sourceCounts = sourceRows.Select(x => x.Count).ToList();
+        var sourcePercents = sourceRows.Select(x => totalSource > 0 ? (double)x.Count / totalSource * 100.0 : 0.0).ToList();
+
+        ViewBag.From = start;
+        ViewBag.To = end;
+        ViewBag.CompletionCount = completionCount;
+        ViewBag.CompletionAvg = completionAvg;
+        ViewBag.ClosedCount = closedCount;
+        ViewBag.ClosedAvg = closedAvg;
+        ViewBag.CategoryRows = categoryRows;
+        ViewBag.CategoryLabels = categoryLabels;
+        ViewBag.CategoryCompletionAvgs = categoryCompletionAvgs;
+        ViewBag.WorkloadRows = workloadRows;
+        ViewBag.SourceLabels = sourceLabels;
+        ViewBag.SourceCounts = sourceCounts;
+        ViewBag.SourcePercents = sourcePercents;
+        ViewBag.TotalSource = totalSource;
+
+        return View();
     }
 
     public async Task<IActionResult> Dashboard(DateTime? startDate, DateTime? endDate, DateTime? from, DateTime? to, DateTime? startParam, DateTime? endParam)
@@ -544,10 +807,10 @@ public class AdminController(
 
     public IActionResult Locations()
     {
-        ViewBag.Buildings = _dbContext.Buildings.OrderBy(b => b.Name).ToList();
-        ViewBag.Floors = _dbContext.Floors.Include(f => f.Building).OrderBy(f => f.Name).ToList();
-        ViewBag.Rooms = _dbContext.Rooms.Include(r => r.Floor).ThenInclude(f => f!.Building).OrderBy(r => r.Name).ToList();
-        ViewBag.Equipment = _dbContext.Equipment.Include(e => e.Room).OrderBy(e => e.Name).ToList();
+        ViewBag.Buildings = _lookupCacheService.GetBuildings();
+        ViewBag.Floors = _lookupCacheService.GetFloors();
+        ViewBag.Rooms = _lookupCacheService.GetRooms();
+        ViewBag.Equipment = _lookupCacheService.GetEquipment();
         return View();
     }
 
@@ -668,7 +931,9 @@ public class AdminController(
             if (hasTickets)
             {
                 room.IsActive = false;
-                await _dbContext.SaveChangesAsync();
+            await _dbContext.SaveChangesAsync();
+            _lookupCacheService.Invalidate();
+
                 TempData["Message"] = "Room has existing tickets and was marked inactive.";
             }
             else
@@ -683,11 +948,11 @@ public class AdminController(
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CreateEquipment(string name, int roomId)
+    public async Task<IActionResult> CreateEquipment(string name, int roomId, bool isSafetyHazard)
     {
         if (!string.IsNullOrWhiteSpace(name) && roomId > 0)
         {
-            _dbContext.Equipment.Add(new Equipment { Name = name.Trim(), RoomId = roomId });
+            _dbContext.Equipment.Add(new Equipment { Name = name.Trim(), RoomId = roomId, IsSafetyHazard = isSafetyHazard });
             await _dbContext.SaveChangesAsync();
         }
         return RedirectToAction(nameof(Locations));
@@ -695,13 +960,14 @@ public class AdminController(
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> EditEquipment(int id, string name, int roomId)
+    public async Task<IActionResult> EditEquipment(int id, string name, int roomId, bool isSafetyHazard)
     {
         var eq = await _dbContext.Equipment.FindAsync(id);
         if (eq is not null && !string.IsNullOrWhiteSpace(name) && roomId > 0)
         {
             eq.Name = name.Trim();
             eq.RoomId = roomId;
+            eq.IsSafetyHazard = isSafetyHazard;
             await _dbContext.SaveChangesAsync();
         }
         return RedirectToAction(nameof(Locations));

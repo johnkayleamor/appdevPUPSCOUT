@@ -32,4 +32,5 @@ public class Equipment
     public string Name { get; set; } = string.Empty;
     public int RoomId { get; set; }
     public Room? Room { get; set; }
+    public bool IsSafetyHazard { get; set; }
 }

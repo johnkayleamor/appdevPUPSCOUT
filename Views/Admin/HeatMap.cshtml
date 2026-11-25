@@ -1,0 +1,103 @@
+@{
+    ViewData["Title"] = "Heat Map";
+    var buildings = (List<appdevPUPSCOUT.Models.Building>)ViewBag.Buildings;
+    var floors = (List<appdevPUPSCOUT.Models.Floor>)ViewBag.Floors;
+    var rooms = (List<appdevPUPSCOUT.Models.Room>)ViewBag.Rooms;
+    var counts = (Dictionary<int, int>)ViewBag.Counts;
+    var selectedBuildingId = (int)ViewBag.SelectedBuildingId;
+    var selectedFloorId = (int)ViewBag.SelectedFloorId;
+    string period = ViewBag.Period as string ?? "30";
+}
+
+<h1>Heat Map</h1>
+
+<form method="get" asp-action="HeatMap" class="mb-3 d-flex gap-2 flex-wrap">
+    <select name="buildingId" class="form-select" style="max-width:220px;">
+        @foreach (var b in buildings)
+        {
+            <option value="@b.Id" selected="@(b.Id == selectedBuildingId)">@b.Name</option>
+        }
+    </select>
+    <select name="floorId" class="form-select" style="max-width:220px;">
+        @foreach (var f in floors.Where(f => f.BuildingId == selectedBuildingId))
+        {
+            <option value="@f.Id" selected="@(f.Id == selectedFloorId)">@f.Building?.Name - @f.Name</option>
+        }
+    </select>
+    <select name="period" class="form-select" style="max-width:180px;">
+        <option value="30" selected="@(period == "30")">Last 30 days</option>
+        <option value="semester" selected="@(period == "semester")">This semester</option>
+        <option value="custom" selected="@(period == "custom")">Custom range</option>
+    </select>
+    <input type="date" name="from" value="@(((DateTime)ViewBag.From).ToString("yyyy-MM-dd"))" class="form-control" style="max-width:160px;" />
+    <input type="date" name="to" value="@(((DateTime)ViewBag.To).ToString("yyyy-MM-dd"))" class="form-control" style="max-width:160px;" />
+    <button class="btn btn-primary">Apply</button>
+</form>
+
+<div class="d-flex flex-wrap gap-3 mb-3">
+    <span><span style="display:inline-block;width:16px;height:16px;background:#adb5bd;border:1px solid #333;"></span> 0</span>
+    <span><span style="display:inline-block;width:16px;height:16px;background:#ffc107;border:1px solid #333;"></span> 1-2</span>
+    <span><span style="display:inline-block;width:16px;height:16px;background:#fd7e14;border:1px solid #333;"></span> 3-5</span>
+    <span><span style="display:inline-block;width:16px;height:16px;background:#dc3545;border:1px solid #333;"></span> 6+</span>
+</div>
+
+<div id="mapContainer" style="overflow:hidden; max-width:620px; border:1px solid #ccc;">
+<svg id="floorSvg" width="100%" height="420" viewBox="0 0 620 420">
+    @{
+        int i = 0;
+        foreach (var r in rooms)
+        {
+            int col = i % 4;
+            int row = i / 4;
+            int x = col * 150 + 10;
+            int y = row * 110 + 10;
+            int c = counts.TryGetValue(r.Id, out var cc) ? cc : 0;
+            string fill = c <= 0 ? "#adb5bd" : c <= 2 ? "#ffc107" : c <= 5 ? "#fd7e14" : "#dc3545";
+            <g class="room-shape" data-room-id="@r.Id" style="cursor:pointer;">
+                <rect x="@x" y="@y" width="140" height="90" fill="@fill" stroke="#333" rx="6" />
+                <text x="@(x+70)" y="@(y+40)" text-anchor="middle" fill="#000" font-size="12">@r.Name</text>
+                <text x="@(x+70)" y="@(y+58)" text-anchor="middle" fill="#000" font-size="12">@c</text>
+            </g>
+            i++;
+        }
+    }
+</svg>
+</div>
+
+<div id="roomPanel" class="card mt-3" style="display:none; max-width:620px;">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+            <h5 id="panelTitle" class="mb-1"></h5>
+            <button type="button" id="closePanel" class="btn btn-sm btn-outline-secondary">&times;</button>
+        </div>
+        <p id="panelCount"></p>
+        <a id="historyLink" class="btn btn-secondary" href="#" style="min-height:44px;">View room history</a>
+    </div>
+</div>
+
+<script>
+    const roomData = @Html.Raw(ViewBag.RoomDataJson);
+
+    document.querySelectorAll('.room-shape').forEach(shape => {
+        shape.addEventListener('click', function () {
+            const roomId = parseInt(this.getAttribute('data-room-id'));
+            const data = roomData.find(r => r.id === roomId);
+            if (!data) return;
+            document.getElementById('panelTitle').textContent = data.name;
+            document.getElementById('panelCount').textContent = 'Report count: ' + data.count;
+            const link = document.getElementById('historyLink');
+            if (data.historyUrl) {
+                link.href = data.historyUrl;
+                link.style.display = 'inline-block';
+            } else {
+                link.style.display = 'none';
+            }
+            const panel = document.getElementById('roomPanel');
+            panel.style.display = 'block';
+        });
+    });
+
+    document.getElementById('closePanel').addEventListener('click', function () {
+        document.getElementById('roomPanel').style.display = 'none';
+    });
+</script>

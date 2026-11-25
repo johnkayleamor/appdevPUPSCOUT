@@ -149,6 +149,10 @@
             <option value="@r.Id">@r.Floor?.Building?.Name - @r.Floor?.Name - @r.Name</option>
         }
     </select>
+    <div class="form-check">
+        <input type="checkbox" name="isSafetyHazard" value="true" class="form-check-input" />
+        <label class="form-check-label">Safety hazard</label>
+    </div>
     <button class="btn btn-primary">Add</button>
 </form>
 <table class="table table-sm">
@@ -167,6 +171,10 @@
                             <option value="@r.Id" selected="@(r.Id == e.RoomId ? "selected" : null)">@r.Floor?.Building?.Name - @r.Floor?.Name - @r.Name</option>
                         }
                     </select>
+                    <div class="form-check">
+                        <input type="checkbox" name="isSafetyHazard" value="true" class="form-check-input" checked="@e.IsSafetyHazard" />
+                        <label class="form-check-label">Safety hazard</label>
+                    </div>
                     <button class="btn btn-sm btn-secondary">Save</button>
                 </form>
             </td>

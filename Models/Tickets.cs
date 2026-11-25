@@ -14,6 +14,9 @@ public class Ticket
     public string Description { get; set; } = string.Empty;
     public TicketStatus Status { get; set; } = TicketStatus.Pending;
     public TicketPriority Priority { get; set; } = TicketPriority.Medium;
+    public bool PriorityIsManual { get; set; }
+    public string Source { get; set; } = "List";
+    public DateTime? ClosedAt { get; set; }
     public string ReporterId { get; set; } = string.Empty;
     public ApplicationUser? Reporter { get; set; }
     public string? AssigneeId { get; set; }

@@ -287,6 +287,9 @@ namespace appdevPUPSCOUT.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("IsSafetyHazard")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -304,6 +307,7 @@ namespace appdevPUPSCOUT.Data.Migrations
                         new
                         {
                             Id = 1,
+                            IsSafetyHazard = false,
                             Name = "Projector",
                             RoomId = 1
                         });
@@ -448,6 +452,9 @@ namespace appdevPUPSCOUT.Data.Migrations
                     b.Property<int>("Category")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("ClosureType")
                         .HasColumnType("INTEGER");
 
@@ -464,6 +471,9 @@ namespace appdevPUPSCOUT.Data.Migrations
                     b.Property<int>("Priority")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("PriorityIsManual")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("RejectReason")
                         .HasColumnType("TEXT");
 
@@ -473,6 +483,10 @@ namespace appdevPUPSCOUT.Data.Migrations
 
                     b.Property<int>("RoomId")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("Status")
                         .HasColumnType("INTEGER");

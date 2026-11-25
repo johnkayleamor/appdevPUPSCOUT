@@ -24,7 +24,8 @@ public class TicketWorkflowService(ApplicationDbContext dbContext, TrackingNumbe
             EquipmentId = model.EquipmentId,
             Description = model.Description,
             ReporterId = reporter.Id,
-            Status = TicketStatus.Pending
+            Status = TicketStatus.Pending,
+            Source = NormalizeSource(model.Source)
         };
 
         ticket.Priority = await _priorityService.CalculateAsync(ticket);
@@ -42,6 +43,8 @@ public class TicketWorkflowService(ApplicationDbContext dbContext, TrackingNumbe
         await _dbContext.SaveChangesAsync();
 
         await _routingService.AssignAsync(ticket);
+        // Re-check priority rule for this room/equipment (may raise affected tickets).
+        await _priorityService.RecheckAsync(ticket.RoomId, ticket.EquipmentId);
         await _auditService.Log(reporter.Id, "Create", ticket.Id, $"Ticket {ticket.TrackingNumber} created.", reporter.Id, reporter.Email, reporter.Email);
 
         var admins = await _userManager.GetUsersInRoleAsync("Admin");
@@ -135,6 +138,7 @@ public class TicketWorkflowService(ApplicationDbContext dbContext, TrackingNumbe
 
         ticket.Status = TicketStatus.Closed;
         ticket.ClosureType = isAdmin ? TicketClosureType.ClosedByAdmin : TicketClosureType.Confirmed;
+        ticket.ClosedAt = DateTime.UtcNow;
 
         _dbContext.TicketStatusHistories.Add(new TicketStatusHistory
         {
@@ -275,6 +279,28 @@ public class TicketWorkflowService(ApplicationDbContext dbContext, TrackingNumbe
             $"Ticket {ticket.TrackingNumber} was assigned to you.", $"/Tickets/Details/{ticket.Id}");
     }
 
+    public async Task<(bool Success, string? Error)> ChangePriorityAsync(int ticketId, TicketPriority newPriority, string userId, bool isAdmin, string? adminName)
+    {
+        if (!isAdmin)
+        {
+            return (false, "Only admins can change priority.");
+        }
+
+        var ticket = await _dbContext.Tickets.FindAsync(ticketId);
+        if (ticket is null)
+        {
+            return (false, "Ticket not found.");
+        }
+
+        await _priorityService.ChangeManualAsync(ticket, newPriority, userId, adminName);
+        return (true, null);
+    }
+
+    private static string NormalizeSource(string? source)
+    {
+        return string.Equals(source, "Map", StringComparison.OrdinalIgnoreCase) ? "Map" : "List";
+    }
+
     public async Task AutoCloseAsync(int ticketId)
     {
         var ticket = await _dbContext.Tickets.FindAsync(ticketId);
@@ -282,6 +308,7 @@ public class TicketWorkflowService(ApplicationDbContext dbContext, TrackingNumbe
 
         ticket.Status = TicketStatus.Closed;
         ticket.ClosureType = TicketClosureType.AutoClosed;
+        ticket.ClosedAt = DateTime.UtcNow;
 
         _dbContext.TicketStatusHistories.Add(new TicketStatusHistory
         {

@@ -29,4 +29,5 @@ public class TicketCreateViewModel
 
     public IFormFile? Image { get; set; }
     public List<IFormFile>? Photos { get; set; }
+    public string Source { get; set; } = "List";
 }
