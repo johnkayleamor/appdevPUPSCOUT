@@ -15,7 +15,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("appdevPUPSCOUT")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+08976b6f93f18200d130684a9a033c16950bccf9")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+857d75fac1cdf3aeb7ab3b44486d64e552be352a")]
 [assembly: System.Reflection.AssemblyProductAttribute("appdevPUPSCOUT")]
 [assembly: System.Reflection.AssemblyTitleAttribute("appdevPUPSCOUT")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
