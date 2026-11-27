@@ -1,0 +1,16 @@
+﻿# Build output
+bin/
+obj/
+.vs/
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+app.db
+
+# Simulated email log (contains OTP codes)
+emails.txt
+
+# Uploaded files
+wwwroot/uploads/

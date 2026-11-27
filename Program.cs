@@ -11,7 +11,12 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlite(connectionString));
-builder.Services.AddDatabaseDeveloperPageExceptionFilter();
+
+// Developer exception page/filter is only useful (and safe) in Development.
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddDatabaseDeveloperPageExceptionFilter();
+}
 
 builder.Services.AddDefaultIdentity<ApplicationUser>(options =>
 {
@@ -31,6 +36,13 @@ if (string.Equals(emailMode, "Smtp", StringComparison.OrdinalIgnoreCase))
 }
 else
 {
+    // Simulated email writes messages (including OTP codes) to disk.
+    // Refuse to run that mode in Production so secrets are not leaked.
+    if (builder.Environment.IsProduction())
+    {
+        throw new InvalidOperationException("Simulated email mode is not allowed in Production. Set Email:Mode to \"Smtp\" and configure SMTP settings.");
+    }
+
     builder.Services.AddTransient<Microsoft.AspNetCore.Identity.UI.Services.IEmailSender, appdevPUPSCOUT.Services.SimulatedEmailSender>();
     builder.Services.AddTransient<appdevPUPSCOUT.Services.IAppEmailService, appdevPUPSCOUT.Services.SimulatedEmailSender>();
 }
@@ -125,24 +137,90 @@ using (var scope = app.Services.CreateScope())
         }
     }
 
-    foreach (var role in roles)
+    // Seeded test accounts are Development-only. Passwords come from user secrets,
+    // never from source code. In Production, create the first admin manually.
+    if (app.Environment.IsDevelopment())
     {
-        var email = $"{role.ToLower()}@pup.edu.ph";
-        var user = await userManager.FindByEmailAsync(email);
-        if (user is null)
+        var logger = app.Logger;
+
+        // Warn about any seeded account that still accepts the old default password.
+        foreach (var role in roles)
         {
-            user = new ApplicationUser { UserName = email, Email = email, EmailConfirmed = true };
-            await userManager.CreateAsync(user, "Passw0rd!");
+            var email = $"{role.ToLower()}@pup.edu.ph";
+            var existing = await userManager.FindByEmailAsync(email);
+            if (existing is not null && await userManager.CheckPasswordAsync(existing, "Passw0rd!"))
+            {
+                logger.LogWarning("Seeded account {Email} still accepts the old default password. Reset it manually; passwords are not changed automatically.", email);
+            }
         }
 
-        if (!await userManager.IsInRoleAsync(user, role))
+        foreach (var role in roles)
         {
-            await userManager.AddToRoleAsync(user, role);
+            var email = $"{role.ToLower()}@pup.edu.ph";
+            // Per-role password wins; falls back to a shared dev password.
+            var password = app.Configuration[$"SeedPasswords:{role}"]
+                ?? app.Configuration["SeedUsers:Password"];
+
+            if (string.IsNullOrWhiteSpace(password))
+            {
+                // No password configured in user secrets; skip creating this test user.
+                logger.LogWarning("Missing seed password for {Role}: set SeedPasswords:{Role} or SeedUsers:Password in user secrets. Skipping seeded user {Email}.", role, role, email);
+                continue;
+            }
+
+            var user = await userManager.FindByEmailAsync(email);
+            if (user is null)
+            {
+                user = new ApplicationUser { UserName = email, Email = email, EmailConfirmed = true };
+                await userManager.CreateAsync(user, password);
+            }
+
+            if (!await userManager.IsInRoleAsync(user, role))
+            {
+                await userManager.AddToRoleAsync(user, role);
+            }
         }
     }
 
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     db.Database.Migrate();
+
+    // Promote an existing registered account to Admin in any environment,
+    // but only when no active Admin exists and Bootstrap:AdminEmail is set.
+    var bootstrapEmail = app.Configuration["Bootstrap:AdminEmail"];
+    if (!string.IsNullOrWhiteSpace(bootstrapEmail))
+    {
+        var admins = await userManager.GetUsersInRoleAsync("Admin");
+        var activeAdmins = admins.Where(u => !u.IsDeactivated && (u.LockoutEnd is null || u.LockoutEnd <= DateTimeOffset.UtcNow)).ToList();
+
+        if (activeAdmins.Count == 0)
+        {
+            var target = await userManager.FindByEmailAsync(bootstrapEmail);
+            if (target is not null)
+            {
+                if (!target.EmailConfirmed)
+                {
+                    app.Logger.LogWarning("Bootstrap:AdminEmail {Email} is not email-confirmed; no promotion performed.", bootstrapEmail);
+                }
+                else
+                {
+                    await userManager.AddToRoleAsync(target, "Admin");
+
+                    var auditService = scope.ServiceProvider.GetRequiredService<appdevPUPSCOUT.Services.AuditService>();
+                    await auditService.Log(null, "BootstrapAdmin", null,
+                        $"Promoted {target.Email} to Admin via Bootstrap:AdminEmail.",
+                        target.Id, target.Email, "Startup");
+
+                    app.Logger.LogWarning("Promoted {Email} to Admin via Bootstrap:AdminEmail. Remove Bootstrap:AdminEmail now.", bootstrapEmail);
+                }
+            }
+            else
+            {
+                app.Logger.LogWarning("Bootstrap:AdminEmail {Email} was not found; no account was created or promoted.", bootstrapEmail);
+            }
+        }
+    }
+
     if (!db.Rooms.Any())
     {
         var building = new Building { Name = "Main Building" };
