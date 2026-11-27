@@ -13,7 +13,14 @@ public class OtpCode
     public string Purpose { get; set; } = string.Empty;
 
     [Required]
-    public string Code { get; set; } = string.Empty;
+    public string CodeHash { get; set; } = string.Empty;
+
+    [Required]
+    public string Salt { get; set; } = string.Empty;
+
+    public int Attempts { get; set; }
+
+    public string? RequestIp { get; set; }
 
     public DateTime ExpiresAt { get; set; }
 

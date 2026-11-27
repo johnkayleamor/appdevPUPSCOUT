@@ -99,20 +99,36 @@
                 if (!files.length) return;
                 const compressed = [];
                 for (const file of files) {
-                    if (!file.type.startsWith('image/')) { compressed.push(file); continue; }
-                    const img = await new Promise((resolve, reject) => {
-                        const i = new Image();
-                        i.onload = () => resolve(i);
-                        i.onerror = reject;
-                        i.src = URL.createObjectURL(file);
-                    });
-                    const scale = Math.min(1, 1280 / img.width);
-                    const canvas = document.createElement('canvas');
-                    canvas.width = Math.round(img.width * scale);
-                    canvas.height = Math.round(img.height * scale);
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+                    if (!file.type.startsWith('image/')) {
+                        alert('Only image files can be uploaded.');
+                        continue;
+                    }
+
+                    let blob = null;
+                    try {
+                        const img = await new Promise((resolve, reject) => {
+                            const i = new Image();
+                            i.onload = () => resolve(i);
+                            i.onerror = reject;
+                            i.src = URL.createObjectURL(file);
+                        });
+                        const scale = Math.min(1, 1280 / img.width);
+                        const canvas = document.createElement('canvas');
+                        canvas.width = Math.round(img.width * scale);
+                        canvas.height = Math.round(img.height * scale);
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+                    } catch (e) {
+                        alert('Could not read this image. Please choose a JPEG or PNG file.');
+                        continue;
+                    }
+
+                    if (!blob) {
+                        alert('Could not compress this image. Please choose a JPEG or PNG file.');
+                        continue;
+                    }
+
                     compressed.push(new File([blob], file.name.replace(/\\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
                 }
                 const dt = new DataTransfer();

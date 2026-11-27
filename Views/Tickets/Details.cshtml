@@ -41,7 +41,7 @@ else
     <div class="d-flex flex-wrap gap-2">
         @foreach (var photo in Model.Photos)
         {
-            <img src="~/@photo.FilePath" alt="Ticket photo" style="max-width:240px; max-height:240px;" class="img-thumbnail" />
+            <img src="@Url.Action("Photo", "Tickets", new { id = photo.Id })" alt="Ticket photo" style="max-width:240px; max-height:240px;" class="img-thumbnail" />
         }
     </div>
 }

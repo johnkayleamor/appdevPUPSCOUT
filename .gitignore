@@ -13,4 +13,5 @@ app.db
 emails.txt
 
 # Uploaded files
+uploads/
 wwwroot/uploads/

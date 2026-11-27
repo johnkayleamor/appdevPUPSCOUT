@@ -508,22 +508,38 @@ public class TicketsController(
     [HttpPost]
     [ValidateAntiForgeryToken]
     [EnableRateLimiting("ReportSubmission")]
+    [RequestSizeLimit(30 * 1024 * 1024)]
     public async Task<IActionResult> Create(TicketCreateViewModel model)
     {
         var uploadedPhotos = new List<IFormFile>();
         if (model.Image is not null) uploadedPhotos.Add(model.Image);
         if (model.Photos is not null) uploadedPhotos.AddRange(model.Photos);
 
+        const int maxPhotosPerTicket = 5;
+        if (uploadedPhotos.Count > maxPhotosPerTicket)
+        {
+            ModelState.AddModelError(nameof(model.Photos), $"You can upload at most {maxPhotosPerTicket} photos per ticket.");
+        }
+
         foreach (var photo in uploadedPhotos)
         {
-            if (!photo.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            if (photo.Length == 0)
             {
-                ModelState.AddModelError(nameof(model.Photos), "Only image files are allowed.");
+                ModelState.AddModelError(nameof(model.Photos), "Empty files are not allowed.");
+                continue;
             }
 
             if (photo.Length > 5 * 1024 * 1024)
             {
                 ModelState.AddModelError(nameof(model.Photos), "Each image must be 5 MB or smaller.");
+                continue;
+            }
+
+            // Validate by magic bytes, never by client Content-Type or file name.
+            var detectedExtension = DetectImageExtension(photo);
+            if (detectedExtension is null)
+            {
+                ModelState.AddModelError(nameof(model.Photos), "Only JPEG and PNG images are allowed.");
             }
         }
 
@@ -546,12 +562,14 @@ public class TicketsController(
 
         if (uploadedPhotos.Count > 0)
         {
-            var uploads = Path.Combine(_environment.WebRootPath, "uploads", "tickets", ticket.Id.ToString());
+            // Store outside wwwroot so files are not directly browsable.
+            var uploads = Path.Combine(_environment.ContentRootPath, "uploads", "tickets", ticket.Id.ToString());
             Directory.CreateDirectory(uploads);
 
             foreach (var photo in uploadedPhotos)
             {
-                var fileName = Guid.NewGuid().ToString("N") + Path.GetExtension(photo.FileName);
+                var extension = DetectImageExtension(photo)!;
+                var fileName = Guid.NewGuid().ToString("N") + extension;
                 var filePath = Path.Combine(uploads, fileName);
                 await using var stream = System.IO.File.Create(filePath);
                 await photo.CopyToAsync(stream);
@@ -569,5 +587,71 @@ public class TicketsController(
 
         TempData["Message"] = $"Report submitted. Tracking: {ticket.TrackingNumber}";
         return RedirectToAction("Index", "Home");
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Photo(int id)
+    {
+        var photo = await _dbContext.TicketPhotos
+            .Include(p => p.Ticket)
+            .FirstOrDefaultAsync(p => p.Id == id);
+        if (photo?.Ticket is null)
+        {
+            return NotFound();
+        }
+
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null || !CanAccessTicket(photo.Ticket, user))
+        {
+            // Do not reveal whether the photo exists.
+            return NotFound();
+        }
+
+        var uploadsRoot = Path.GetFullPath(Path.Combine(_environment.ContentRootPath, "uploads"));
+        var fullPath = Path.GetFullPath(Path.Combine(_environment.ContentRootPath, photo.FilePath.Replace('/', Path.DirectorySeparatorChar)));
+        if (!fullPath.StartsWith(uploadsRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) || !System.IO.File.Exists(fullPath))
+        {
+            return NotFound();
+        }
+
+        var contentType = photo.FilePath.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+            ? "image/png"
+            : "image/jpeg";
+
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        Response.Headers["Content-Disposition"] = "inline";
+
+        return PhysicalFile(fullPath, contentType);
+    }
+
+    private static string? DetectImageExtension(IFormFile file)
+    {
+        if (file is null || file.Length < 8)
+        {
+            return null;
+        }
+
+        Span<byte> header = stackalloc byte[8];
+        using var stream = file.OpenReadStream();
+        var read = stream.Read(header);
+        if (read < 8)
+        {
+            return null;
+        }
+
+        // JPEG: FF D8 FF
+        if (header[0] == 0xFF && header[1] == 0xD8 && header[2] == 0xFF)
+        {
+            return ".jpg";
+        }
+
+        // PNG: 89 50 4E 47 0D 0A 1A 0A
+        if (header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47
+            && header[4] == 0x0D && header[5] == 0x0A && header[6] == 0x1A && header[7] == 0x0A)
+        {
+            return ".png";
+        }
+
+        return null;
     }
 }

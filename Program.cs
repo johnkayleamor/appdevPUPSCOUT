@@ -55,6 +55,9 @@ builder.Services.AddScoped<appdevPUPSCOUT.Services.PriorityService>();
 builder.Services.AddScoped<appdevPUPSCOUT.Services.LookupCacheService>();
 builder.Services.AddScoped<appdevPUPSCOUT.Services.AuditService>();
 builder.Services.AddScoped<appdevPUPSCOUT.Services.NotificationService>();
+builder.Services.AddSingleton<appdevPUPSCOUT.Services.IEmailQueue, appdevPUPSCOUT.Services.EmailQueue>();
+builder.Services.AddHostedService<appdevPUPSCOUT.Services.EmailSenderBackgroundService>();
+builder.Services.AddHostedService<appdevPUPSCOUT.Services.OtpCleanupService>();
 builder.Services.AddHostedService<appdevPUPSCOUT.Services.SuspensionCleanupService>();
 builder.Services.AddHostedService<appdevPUPSCOUT.Services.AutoClosePendingVerificationService>();
 
@@ -92,6 +95,21 @@ builder.Services.AddRateLimiter(options =>
 
 builder.Services.AddControllersWithViews();
 
+var allowedEmailDomains = builder.Configuration.GetSection("Registration:AllowedEmailDomains").Get<string[]>() ?? Array.Empty<string>();
+if (allowedEmailDomains.Length == 0)
+{
+    throw new InvalidOperationException("Registration:AllowedEmailDomains is required and must contain at least one domain.");
+}
+
+// Allow a full report with up to 5 photos at 5 MB each, plus a little overhead.
+const long maxReportSize = 30 * 1024 * 1024;
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = maxReportSize);
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = maxReportSize;
+    options.ValueCountLimit = 1024;
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -106,12 +124,46 @@ else
     app.UseHsts();
 }
 
+// Only trust forwarded IP headers from configured proxies (defaults to none beyond loopback).
+// When deploying behind a proxy or host, add that proxy's address to ForwardedHeaders:KnownProxies.
+var forwardedOptions = new Microsoft.AspNetCore.Builder.ForwardedHeadersOptions
+{
+    ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
+};
+foreach (var proxy in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? Array.Empty<string>())
+{
+    if (System.Net.IPAddress.TryParse(proxy, out var address))
+    {
+        forwardedOptions.KnownProxies.Add(address);
+    }
+}
+app.UseForwardedHeaders(forwardedOptions);
+
 app.UseHttpsRedirection();
+
 app.UseRouting();
 
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
+
+// Turn oversized uploads into a readable message instead of a connection drop.
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Microsoft.AspNetCore.Http.BadHttpRequestException ex) when (ex.StatusCode == StatusCodes.Status413RequestEntityTooLarge)
+    {
+        if (!context.Response.HasStarted)
+        {
+            context.Response.StatusCode = StatusCodes.Status413RequestEntityTooLarge;
+            context.Response.ContentType = "text/plain";
+            await context.Response.WriteAsync("The report is too large. Please upload at most 5 photos of 5 MB each.");
+        }
+    }
+});
 
 app.MapStaticAssets();
 
@@ -218,6 +270,28 @@ using (var scope = app.Services.CreateScope())
             {
                 app.Logger.LogWarning("Bootstrap:AdminEmail {Email} was not found; no account was created or promoted.", bootstrapEmail);
             }
+        }
+    }
+
+    // One-time safe copy of legacy photos from wwwroot/uploads to the new
+    // non-public uploads folder. Old files are left in place.
+    if (app.Environment.IsDevelopment())
+    {
+        var oldUploads = Path.Combine(app.Environment.WebRootPath, "uploads");
+        var newUploads = Path.Combine(app.Environment.ContentRootPath, "uploads");
+        if (Directory.Exists(oldUploads))
+        {
+            foreach (var oldFile in Directory.GetFiles(oldUploads, "*", SearchOption.AllDirectories))
+            {
+                var relative = Path.GetRelativePath(oldUploads, oldFile);
+                var newFile = Path.Combine(newUploads, relative);
+                Directory.CreateDirectory(Path.GetDirectoryName(newFile)!);
+                if (!File.Exists(newFile))
+                {
+                    File.Copy(oldFile, newFile);
+                }
+            }
+            app.Logger.LogInformation("Copied legacy uploads from wwwroot/uploads to uploads. Old files were left in place.");
         }
     }
 

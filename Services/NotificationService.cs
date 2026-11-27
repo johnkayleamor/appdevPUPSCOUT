@@ -5,11 +5,11 @@ using appdevPUPSCOUT.Models;
 
 namespace appdevPUPSCOUT.Services;
 
-public class NotificationService(ApplicationDbContext dbContext, UserManager<ApplicationUser> userManager, Microsoft.AspNetCore.Identity.UI.Services.IEmailSender emailSender, ILogger<NotificationService> logger)
+public class NotificationService(ApplicationDbContext dbContext, UserManager<ApplicationUser> userManager, IEmailQueue emailQueue, ILogger<NotificationService> logger)
 {
     private readonly ApplicationDbContext _dbContext = dbContext;
     private readonly UserManager<ApplicationUser> _userManager = userManager;
-    private readonly Microsoft.AspNetCore.Identity.UI.Services.IEmailSender _emailSender = emailSender;
+    private readonly IEmailQueue _emailQueue = emailQueue;
     private readonly ILogger<NotificationService> _logger = logger;
 
     public async Task NotifyAsync(string userId, int? ticketId, string trackingNumber, string message, string? link, bool sendEmail = true)
@@ -29,17 +29,14 @@ public class NotificationService(ApplicationDbContext dbContext, UserManager<App
         var user = await _userManager.FindByIdAsync(userId);
         if (user?.Email is not null)
         {
-            try
-            {
-                var body = string.IsNullOrWhiteSpace(link)
-                    ? message
-                    : $"{message}\n\nView ticket: {link}";
-                await _emailSender.SendEmailAsync(user.Email, $"Ticket {trackingNumber}", body);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to send notification email to {Email}.", user.Email);
-            }
+            var body = string.IsNullOrWhiteSpace(link)
+                ? message
+                : $"{message}\n\nView ticket: {link}";
+            await _emailQueue.EnqueueAsync(new EmailMessage(
+                "TicketNotification",
+                user.Email,
+                $"Ticket {trackingNumber}",
+                body));
         }
     }
 

@@ -11,6 +11,18 @@
     <div class="alert alert-danger">@err</div>
 }
 
+<form asp-action="ClearOtpLimits" method="post" class="row g-2 mb-3">
+    <div class="col-md-4">
+        <input type="email" name="email" class="form-control" placeholder="user@pup.edu.ph" required />
+    </div>
+    <div class="col-md-4">
+        <input type="text" name="reason" class="form-control" placeholder="Reason" required />
+    </div>
+    <div class="col-md-2">
+        <button class="btn btn-sm btn-warning" type="submit">Clear OTP limits</button>
+    </div>
+</form>
+
 <table class="table">
     <thead>
         <tr>

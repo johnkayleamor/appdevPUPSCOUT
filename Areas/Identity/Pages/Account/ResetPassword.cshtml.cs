@@ -9,10 +9,12 @@ namespace appdevPUPSCOUT.Areas.Identity.Pages.Account;
 
 public class ResetPasswordModel(
     UserManager<ApplicationUser> userManager,
-    OtpService otpService) : PageModel
+    OtpService otpService,
+    IConfiguration configuration) : PageModel
 {
     private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly OtpService _otpService = otpService;
+    private readonly IConfiguration _configuration = configuration;
 
     [BindProperty]
     public InputModel Input { get; set; } = new();
@@ -40,12 +42,33 @@ public class ResetPasswordModel(
 
     public void OnGet(string? email = null)
     {
-        Input.Email = email ?? string.Empty;
+        Input.Email = (email ?? string.Empty).Trim().ToLowerInvariant();
+    }
+
+    private bool IsAllowedEmail(string email)
+    {
+        email = (email ?? string.Empty).Trim().ToLowerInvariant();
+        if (email.Contains(' ')) return false;
+        var firstAt = email.IndexOf('@');
+        var lastAt = email.LastIndexOf('@');
+        if (firstAt <= 0 || firstAt != lastAt) return false;
+        var domain = email[(lastAt + 1)..];
+
+        var allowed = _configuration.GetSection("Registration:AllowedEmailDomains").Get<string[]>() ?? Array.Empty<string>();
+        return allowed.Any(d => string.Equals(d.Trim().ToLowerInvariant(), domain, StringComparison.Ordinal));
     }
 
     public async Task<IActionResult> OnPostAsync()
     {
+        Input.Email = (Input.Email ?? string.Empty).Trim().ToLowerInvariant();
+
         if (!ModelState.IsValid) return Page();
+
+        if (!IsAllowedEmail(Input.Email))
+        {
+            ModelState.AddModelError(string.Empty, "Invalid request.");
+            return Page();
+        }
 
         var user = await _userManager.FindByEmailAsync(Input.Email);
         if (user is null)

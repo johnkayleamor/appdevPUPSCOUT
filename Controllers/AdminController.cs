@@ -18,7 +18,8 @@ public class AdminController(
     Services.NotificationService notificationService,
     Services.LookupCacheService lookupCacheService,
     IConfiguration configuration,
-    ILogger<AdminController> logger) : Controller
+    ILogger<AdminController> logger,
+    Services.IEmailQueue emailQueue) : Controller
 {
     private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly RoleManager<IdentityRole> _roleManager = roleManager;
@@ -30,6 +31,7 @@ public class AdminController(
     private readonly Services.LookupCacheService _lookupCacheService = lookupCacheService;
     private readonly IConfiguration _configuration = configuration;
     private readonly ILogger<AdminController> _logger = logger;
+    private readonly Services.IEmailQueue _emailQueue = emailQueue;
 
     public async Task<IActionResult> Users()
     {
@@ -130,15 +132,11 @@ public class AdminController(
         await _auditService.Log(adminUser?.Id, "Suspend", null, reason, user.Id, user.Email, User.Identity?.Name);
 
         var appealContact = _configuration["Support:AppealContact"] ?? "admin@pup.edu.ph";
-        try
-        {
-            await _emailSender.SendEmailAsync(user.Email!, "Account suspended",
-                $"Your account has been suspended until {until:u}. Reason: {reason}. To appeal, contact {appealContact}.");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to send suspension email.");
-        }
+        await _emailQueue.EnqueueAsync(new Services.EmailMessage(
+            "AccountSuspended",
+            user.Email!,
+            "Account suspended",
+            $"Your account has been suspended until {until:u}. Reason: {reason}. To appeal, contact {appealContact}."));
 
         return RedirectToAction(nameof(Users));
     }
@@ -183,15 +181,11 @@ public class AdminController(
         await _auditService.Log(adminUser?.Id, "Deactivate", null, reason, user.Id, user.Email, User.Identity?.Name);
 
         var appealContact = _configuration["Support:AppealContact"] ?? "admin@pup.edu.ph";
-        try
-        {
-            await _emailSender.SendEmailAsync(user.Email!, "Account deactivated",
-                $"Your account has been deactivated. Reason: {reason}. To appeal, contact {appealContact}.");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to send deactivation email.");
-        }
+        await _emailQueue.EnqueueAsync(new Services.EmailMessage(
+            "AccountDeactivated",
+            user.Email!,
+            "Account deactivated",
+            $"Your account has been deactivated. Reason: {reason}. To appeal, contact {appealContact}."));
 
         return RedirectToAction(nameof(Users));
     }
@@ -1011,15 +1005,11 @@ public class AdminController(
         await _auditService.Log(adminUser?.Id, "Reactivate", null, reason, user.Id, user.Email, User.Identity?.Name);
 
         var appealContact = _configuration["Support:AppealContact"] ?? "admin@pup.edu.ph";
-        try
-        {
-            await _emailSender.SendEmailAsync(user.Email!, "Account reactivated",
-                $"Your account has been reactivated. Reason: {reason}. To appeal, contact {appealContact}.");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to send reactivation email.");
-        }
+        await _emailQueue.EnqueueAsync(new Services.EmailMessage(
+            "AccountReactivated",
+            user.Email!,
+            "Account reactivated",
+            $"Your account has been reactivated. Reason: {reason}. To appeal, contact {appealContact}."));
 
         // In-app notification since the user can log in again.
         try
@@ -1032,6 +1022,37 @@ public class AdminController(
             _logger.LogError(ex, "Failed to create reactivation notification.");
         }
 
+        return RedirectToAction(nameof(Users));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ClearOtpLimits(string email, string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            TempData["Error"] = "A reason is required.";
+            return RedirectToAction(nameof(Users));
+        }
+
+        email = (email ?? string.Empty).Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            TempData["Error"] = "Email is required.";
+            return RedirectToAction(nameof(Users));
+        }
+
+        var deleted = await _dbContext.OtpCodes
+            .Where(o => o.Email == email)
+            .ExecuteDeleteAsync();
+
+        var admin = await _userManager.GetUserAsync(User);
+        await _auditService.Log(admin?.Id, "ClearOtpLimits", null,
+            $"Cleared OTP limits for {email}. Removed {deleted} code(s). Reason: {reason}.",
+            null, email, User.Identity?.Name);
+
+        TempData["Message"] = $"OTP limits cleared for {email}.";
         return RedirectToAction(nameof(Users));
     }
 

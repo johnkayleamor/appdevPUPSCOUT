@@ -11,11 +11,15 @@ namespace appdevPUPSCOUT.Areas.Identity.Pages.Account;
 public class ForgotPasswordModel(
     UserManager<ApplicationUser> userManager,
     IEmailSender emailSender,
-    OtpService otpService) : PageModel
+    OtpService otpService,
+    IConfiguration configuration,
+    IEmailQueue emailQueue) : PageModel
 {
     private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly IEmailSender _emailSender = emailSender;
     private readonly OtpService _otpService = otpService;
+    private readonly IConfiguration _configuration = configuration;
+    private readonly IEmailQueue _emailQueue = emailQueue;
 
     [BindProperty]
     public InputModel Input { get; set; } = new();
@@ -29,24 +33,55 @@ public class ForgotPasswordModel(
 
     public void OnGet() { }
 
+    private bool IsAllowedEmail(string email)
+    {
+        email = (email ?? string.Empty).Trim().ToLowerInvariant();
+        if (email.Contains(' ')) return false;
+        var firstAt = email.IndexOf('@');
+        var lastAt = email.LastIndexOf('@');
+        if (firstAt <= 0 || firstAt != lastAt) return false;
+        var domain = email[(lastAt + 1)..];
+
+        var allowed = _configuration.GetSection("Registration:AllowedEmailDomains").Get<string[]>() ?? Array.Empty<string>();
+        return allowed.Any(d => string.Equals(d.Trim().ToLowerInvariant(), domain, StringComparison.Ordinal));
+    }
+
     public async Task<IActionResult> OnPostAsync()
     {
+        Input.Email = (Input.Email ?? string.Empty).Trim().ToLowerInvariant();
+
         if (!ModelState.IsValid) return Page();
 
-        if (!Input.Email.EndsWith("@pup.edu.ph", StringComparison.OrdinalIgnoreCase))
+        if (!IsAllowedEmail(Input.Email))
         {
-            ModelState.AddModelError("Input.Email", "Only @pup.edu.ph email addresses are allowed.");
+            ModelState.AddModelError("Input.Email", "Please use your PUP email address.");
             return Page();
+        }
+
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var (allowed, error, _) = await _otpService.CanRequestAsync(Input.Email, OtpService.PasswordReset, ip);
+        if (!allowed)
+        {
+            TempData["Error"] = error;
+            return RedirectToPage("ResetPassword", new { email = Input.Email });
         }
 
         var user = await _userManager.FindByEmailAsync(Input.Email);
         if (user is not null)
         {
-            var otp = await _otpService.GenerateAsync(Input.Email, OtpService.PasswordReset);
-            await _emailSender.SendEmailAsync(
-                Input.Email,
-                "Reset your password",
-                $"Your password reset code is: <b>{otp}</b>. It expires in 10 minutes.");
+            var (success, code, _) = await _otpService.GenerateAsync(Input.Email, OtpService.PasswordReset, ip);
+            if (success && code is not null)
+            {
+                var queued = await _emailQueue.EnqueueAsync(new EmailMessage(
+                    "PasswordResetOtp",
+                    Input.Email,
+                    "Reset your password",
+                    $"Your password reset code is: <b>{code}</b>. It expires in 10 minutes."));
+                if (!queued)
+                {
+                    TempData["Error"] = "Please try again in a moment.";
+                }
+            }
         }
 
         return RedirectToPage("ResetPassword", new { email = Input.Email });

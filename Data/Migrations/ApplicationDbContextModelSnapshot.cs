@@ -382,7 +382,10 @@ namespace appdevPUPSCOUT.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("Code")
+                    b.Property<int>("Attempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CodeHash")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -397,6 +400,13 @@ namespace appdevPUPSCOUT.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestIp")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Salt")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
